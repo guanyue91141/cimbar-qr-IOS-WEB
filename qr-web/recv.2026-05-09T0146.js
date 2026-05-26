@@ -228,7 +228,10 @@ var Recv = function () {
         return Recv.set_error('mediaDevices not supported? :(');
       }
 
-      var startCamera = function (constraints) {
+      var _cams = [];
+      var _currentCamIndex = 0;
+
+      var startCamera = function (constraints, camIndex) {
         navigator.mediaDevices.getUserMedia(constraints)
           .then(localMediaStream => {
             if ('srcObject' in video) {
@@ -238,9 +241,16 @@ var Recv = function () {
             }
             video.play();
             video.requestVideoFrameCallback(Recv.on_frame);
+            console.log(`Camera ${camIndex} started successfully`);
           })
           .catch(err => {
             console.error('Camera error with', JSON.stringify(constraints), err.name, err.message);
+            if ((err.name == 'NotReadableError' || err.name == 'NotFoundError') && _currentCamIndex + 1 < _cams.length) {
+              _currentCamIndex += 1;
+              console.log(`Camera ${camIndex} failed, trying camera ${_currentCamIndex}`);
+              tryCamera(_currentCamIndex);
+              return;
+            }
             if (err.name == 'NotReadableError') {
               Recv.set_error("Camera is busy. Please close other apps using the camera (Zoom, Teams, Camera app) and refresh.");
             } else if (err.name == 'NotFoundError') {
@@ -249,26 +259,57 @@ var Recv = function () {
               Recv.set_error("Camera permission denied. Please allow camera access and refresh.");
             } else if (err.name == 'OverconstrainedError') {
               // constraints too strict, try simpler
-              startCamera({ audio: false, video: true });
+              startCamera({ audio: false, video: true }, camIndex);
             } else {
               Recv.set_error("Camera error: " + err.message);
             }
           });
       };
 
+      function tryCamera(index) {
+        if (index >= _cams.length) {
+          Recv.set_error("All cameras failed to start.");
+          return;
+        }
+        var cam = _cams[index];
+        console.log(`Trying camera ${index}: ${cam.label || '(no label)'} (deviceId: ${cam.deviceId.substring(0, 8)}...)`);
+        startCamera({
+          audio: false,
+          video: {
+            deviceId: { exact: cam.deviceId }
+          }
+        }, index);
+      }
+
       // enumerate cameras first for diagnostics, then start with basic request
       navigator.mediaDevices.enumerateDevices().then(devices => {
-        var cams = devices.filter(d => d.kind == 'videoinput');
-        console.log('Found cameras:', cams.length);
-        if (cams.length == 0) {
+        _cams = devices.filter(d => d.kind == 'videoinput');
+        console.log('Found cameras:', _cams.length);
+        _cams.forEach((cam, i) => {
+          console.log(`Camera ${i}: ${cam.label || '(no label)'}`);
+        });
+        if (_cams.length == 0) {
           Recv.set_error("No camera detected. Please connect a camera and refresh.");
           return;
         }
-        // start with minimal constraints for maximum compatibility
-        startCamera({ audio: false, video: true });
+        // try physical cameras first, skip virtual ones
+        var virtualKeywords = ['virtual', 'webcast', 'obs', 'manycam', 'snap', 'xsplit'];
+        var physicalIndices = [];
+        var virtualIndices = [];
+        for (var i = 0; i < _cams.length; i++) {
+          var label = (_cams[i].label || '').toLowerCase();
+          if (virtualKeywords.some(kw => label.includes(kw))) {
+            virtualIndices.push(i);
+          } else {
+            physicalIndices.push(i);
+          }
+        }
+        var tryOrder = physicalIndices.concat(virtualIndices);
+        _currentCamIndex = tryOrder[0] || 0;
+        tryCamera(_currentCamIndex);
       }).catch(err => {
         console.log('enumerateDevices error, trying camera directly', err);
-        startCamera({ audio: false, video: true });
+        startCamera({ audio: false, video: true }, 0);
       });
     },
 

@@ -149,6 +149,7 @@ var Recv = function () {
   var _workers = [];
   var _nextWorker = 0;
   var _workerReady;
+  var _workersReadyCount = 0;
   var _captureCanvas = null;
   var _captureCtx = null;
   var _cams = [];
@@ -621,13 +622,16 @@ var Recv = function () {
       if (data.failed_extract) { // very common, nothing to do
         return;
       }
-      if (data.res) {
-        Recv.set_HTML("t" + wid, "msg is " + data.res);
-        return;
-      }
       if (data.ready) {
+        _workersReadyCount++;
+        console.log('[Decode] Worker ' + wid + ' ready (' + _workersReadyCount + '/' + _workers.length + ')');
         if (_workerReady)
           _workerReady();
+        return;
+      }
+      // Handle "no wasm" / error messages that don't carry a data.buff
+      if (data.error || !data.buff) {
+        console.warn('[Decode] Worker ' + wid + ' not ready or error:', data.res || data.error);
         return;
       }
 
@@ -648,6 +652,9 @@ var Recv = function () {
 
       _counter += 1;
       if (_workers.length == 0)
+        return;
+      // Don't send frames until at least one worker's WASM is initialized
+      if (_workersReadyCount == 0)
         return;
       if (_nextWorker >= _workers.length)
         _nextWorker = 0;

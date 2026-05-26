@@ -4,8 +4,16 @@
 <head>
   <title>Cimbar Decoder</title>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Cimbar Recv">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <link rel="manifest" href="pwa-recv.2026-05-09T0146.json">
+  <link rel="apple-touch-icon" href="icon-192x192.png">
+  <link rel="icon" type="image/png" href="favicon.ico">
 </head>
 
 <body>
@@ -19,6 +27,8 @@
     html,
     body {
       height: 100vh;
+      height: -webkit-fill-available;
+      height: 100dvh;
     }
 
     body {
@@ -27,6 +37,25 @@
         repeating-linear-gradient(135deg, rgb(0, 0, 0) 0px, rgb(153, 197, 206) 1px, transparent 1px, transparent 30px),
         repeating-linear-gradient(45deg, rgb(0, 0, 0) 0px, rgb(153, 197, 206) 1px, transparent 1px, transparent 30px);
       background-size: cover;
+      /* Safe area insets for notched phones */
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+
+    /* Prevent text selection and touch callout on mobile */
+    * {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* Allow text selection in debug/status areas */
+    .statusbox,
+    #errorbox {
+      -webkit-user-select: text;
+      user-select: text;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -97,24 +126,250 @@
       position: fixed;
       top: 15%;
       right: 20%;
-      width: 5%;
-      height: 5%;
+      width: min(5%, 40px);
+      height: min(5%, 40px);
       z-index: -50;
-      border-right: 5px groove;
-      border-top: 5px groove;
-      box-shadow: inset 0 0 0 4px #555,
+      border-right: clamp(2px, 0.5vw, 5px) groove;
+      border-top: clamp(2px, 0.5vw, 5px) groove;
+      box-shadow: inset 0 0 0 clamp(2px, 0.4vw, 4px) #555;
     }
 
     #crosshair2 {
       position: fixed;
       bottom: 20%;
       left: 15%;
-      width: 5%;
-      height: 5%;
+      width: min(5%, 40px);
+      height: min(5%, 40px);
       z-index: -50;
-      border-left: 5px groove;
-      border-bottom: 5px groove;
-      box-shadow: inset 0 0 0 4px #555,
+      border-left: clamp(2px, 0.5vw, 5px) groove;
+      border-bottom: clamp(2px, 0.5vw, 5px) groove;
+      box-shadow: inset 0 0 0 clamp(2px, 0.4vw, 4px) #555;
+    }
+
+    /* Camera switch button - bottom center */
+    #cam-switch-btn {
+      position: fixed;
+      bottom: max(20px, env(safe-area-inset-bottom, 0px) + 10px);
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.5);
+      border: 2px solid rgba(255, 255, 255, 0.6);
+      color: white;
+      font-size: 24px;
+      cursor: pointer;
+      touch-action: manipulation;
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      transition: opacity 0.3s;
+      opacity: 0.7;
+    }
+
+    #cam-switch-btn:hover,
+    #cam-switch-btn:active {
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.7);
+    }
+
+    /* Start camera overlay */
+    #start-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 50;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+      padding: 30px;
+    }
+
+    #start-overlay.hidden {
+      display: none;
+    }
+
+    #start-overlay h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+      font-weight: 300;
+      letter-spacing: 2px;
+    }
+
+    #start-overlay p {
+      font-size: 14px;
+      margin-bottom: 30px;
+      opacity: 0.7;
+      max-width: 280px;
+      line-height: 1.5;
+    }
+
+    #start-btn {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      border: 2px solid rgba(255, 255, 255, 0.6);
+      color: white;
+      font-size: 36px;
+      cursor: pointer;
+      touch-action: manipulation;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      transition: all 0.3s;
+      margin-bottom: 16px;
+    }
+
+    #start-btn:active {
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.1);
+    }
+
+    #start-btn-label {
+      font-size: 13px;
+      opacity: 0.6;
+      letter-spacing: 1px;
+    }
+
+    /* Debug panel */
+    #debug-panel-btn {
+      position: fixed;
+      bottom: max(90px, env(safe-area-inset-bottom, 0px) + 80px);
+      right: 12px;
+      z-index: 40;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 18px;
+      cursor: pointer;
+      touch-action: manipulation;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      transition: opacity 0.3s;
+      opacity: 0.5;
+      pointer-events: auto;
+    }
+
+    #debug-panel-btn:active {
+      opacity: 1;
+    }
+
+    #debug-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 60;
+      max-height: 45vh;
+      background: rgba(0, 0, 0, 0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      pointer-events: auto;
+    }
+
+    #debug-panel.open {
+      transform: translateY(0);
+    }
+
+    #debug-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      flex-shrink: 0;
+    }
+
+    #debug-panel-header span {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 12px;
+      font-family: monospace;
+      letter-spacing: 1px;
+    }
+
+    #debug-panel-header button {
+      background: none;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    #debug-panel-header button:active {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    #debug-log {
+      padding: 8px 12px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 11px;
+      line-height: 1.6;
+      color: rgba(255, 255, 255, 0.85);
+      white-space: pre-wrap;
+      word-break: break-all;
+      flex: 1;
+      min-height: 80px;
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
+    #debug-log .log-warn {
+      color: #ffa500;
+    }
+
+    #debug-log .log-error {
+      color: #ff4444;
+    }
+
+    #debug-log .log-info {
+      color: #88ccff;
+    }
+
+    /* Dim the background when debug panel is open */
+    #debug-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 55;
+      background: rgba(0, 0, 0, 0.3);
+      display: none;
+      pointer-events: auto;
+    }
+
+    #debug-backdrop.open {
+      display: block;
     }
 
     #nav-container:focus-within {
@@ -280,6 +535,7 @@
       top: 0;
       left: 0;
       height: calc(100% - 60px);
+      height: calc(100dvh - 60px);
       overflow-x: clip;
       background-color: #282C34;
       text-align: center;
@@ -287,6 +543,15 @@
       -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
       transform: translateX(-100%);
       transition: transform .3s;
+      min-width: 220px;
+    }
+
+    /* Full-width nav on mobile */
+    @media (max-width: 480px) {
+      #nav-content {
+        width: 100%;
+        padding: 20px 0;
+      }
     }
 
     #nav-content ul {
@@ -375,13 +640,41 @@
     }
   </style>
 
-  <div id="container">
+<div id="container">
     <video id="video" autoplay="true" playsinline="true" muted="true">
     </video>
   </div>
 
+  <!-- Start camera overlay (shown until user taps) -->
+  <div id="start-overlay">
+    <h1>Cimbar</h1>
+    <p>Tap to start scanning cimbar codes</p>
+    <button id="start-btn" onclick="Recv.startCamera()">▶</button>
+    <div id="start-btn-label">Start Camera</div>
+  </div>
+
+  <!-- Debug panel backdrop -->
+  <div id="debug-backdrop" onclick="Recv.toggleDebugPanel()"></div>
+
+  <!-- Debug log panel -->
+  <div id="debug-panel">
+    <div id="debug-panel-header">
+      <span>Console Log</span>
+      <button onclick="Recv.clearLog()">Clear</button>
+    </div>
+    <div id="debug-log"></div>
+  </div>
+
+  <!-- Floating debug button -->
+  <button id="debug-panel-btn" onclick="Recv.toggleDebugPanel()" title="Debug log">🐛</button>
+
   <div id="crosshair1" class="crosshairs"></div>
   <div id="crosshair2" class="crosshairs"></div>
+
+  <!-- Camera switch button (visible on mobile) -->
+  <button id="cam-switch-btn" onclick="Recv.switchCamera()" title="Switch camera" style="display:none;">
+    ↺
+  </button>
 
   <div id="nav-container" class="mode-auto">
     <div class="bg" onclick="Recv.blurNav();"></div>
@@ -424,15 +717,28 @@
   <script src="zstd.2026-05-09T0146.js"></script>
 
   <script type="text/javascript">
-    Recv.init_ww(4);
+    // Detect mobile and reduce worker count accordingly
+    var isMobile = /Mobi|Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
+    var numWorkers = isMobile ? 2 : 4;
+    if (navigator.hardwareConcurrency) {
+      numWorkers = Math.min(navigator.hardwareConcurrency - 1, isMobile ? 3 : 4);
+      numWorkers = Math.max(1, numWorkers);
+    }
+    console.log('Mobile:', isMobile, 'Workers:', numWorkers);
+    Recv.init_ww(numWorkers);
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./recv-sw.js');
     }
     var video = document.querySelector('#video');
 
+    // Remembers video element for later use when user taps Start
+    Recv._videoEl = video;
+
     var Module = {};
     Module.onRuntimeInitialized = () => {
-      Recv.init_video(video);
+      console.log('WASM loaded, waiting for user to tap Start');
+      // Camera is NOT auto-started — user must tap the start button
+      // This ensures mobile browsers show permission dialog on user gesture
     };
   </script>
 

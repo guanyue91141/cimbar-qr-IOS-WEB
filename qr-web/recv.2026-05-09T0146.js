@@ -1,3 +1,30 @@
+// Console log capture for on-screen debug panel (mobile no-F12)
+var _logBuffer = [];
+var _maxLogLines = 200;
+(function() {
+  var origLog = console.log;
+  var origWarn = console.warn;
+  var origError = console.error;
+  console.log = function() {
+    var msg = Array.prototype.slice.call(arguments).join(' ');
+    _logBuffer.push({ text: msg, type: 'log' });
+    if (_logBuffer.length > _maxLogLines) _logBuffer.shift();
+    origLog.apply(console, arguments);
+  };
+  console.warn = function() {
+    var msg = Array.prototype.slice.call(arguments).join(' ');
+    _logBuffer.push({ text: msg, type: 'warn' });
+    if (_logBuffer.length > _maxLogLines) _logBuffer.shift();
+    origWarn.apply(console, arguments);
+  };
+  console.error = function() {
+    var msg = Array.prototype.slice.call(arguments).join(' ');
+    _logBuffer.push({ text: msg, type: 'error' });
+    if (_logBuffer.length > _maxLogLines) _logBuffer.shift();
+    origError.apply(console, arguments);
+  };
+})();
+
 var Sink = function () {
 
   var _fountainBuff = undefined;
@@ -106,6 +133,8 @@ var Recv = function () {
   var _workers = [];
   var _nextWorker = 0;
   var _workerReady;
+  var _cams = [];
+  var _currentCamIndex = 0;
   var _framesInFlight = 0;
   var _supportedFormats = ["NV12", "I420"]; // have cimbard_* return this somehow?
 
@@ -220,6 +249,83 @@ var Recv = function () {
       }
     },
 
+    _stopCamera: function () {
+      if (_video && _video.srcObject) {
+        var tracks = _video.srcObject.getTracks();
+        tracks.forEach(function (track) { track.stop(); });
+        _video.srcObject = null;
+      }
+    },
+
+    _tryCamera: function (index) {
+      if (index >= _cams.length) {
+        Recv.set_error("All cameras failed to start.");
+        return;
+      }
+      var cam = _cams[index];
+      console.log(`Trying camera ${index}: ${cam.label || '(no label)'} (deviceId: ${cam.deviceId.substring(0, 8)}...)`);
+      Recv._startCamera({
+        audio: false,
+        video: {
+          deviceId: { exact: cam.deviceId }
+        }
+      }, index);
+    },
+
+    _startCamera: function (constraints, camIndex) {
+      var video = _video;
+      navigator.mediaDevices.getUserMedia(constraints)
+        .then(localMediaStream => {
+          if ('srcObject' in video) {
+            video.srcObject = localMediaStream;
+          } else {
+            video.src = URL.createObjectURL(localMediaStream);
+          }
+          video.play();
+          video.requestVideoFrameCallback(Recv.on_frame);
+          console.log(`Camera ${camIndex} started successfully`);
+          // Show camera switch button if multiple cameras
+          var btn = document.getElementById('cam-switch-btn');
+          if (btn && _cams.length > 1) {
+            btn.style.display = 'flex';
+          }
+        })
+        .catch(err => {
+          console.error('Camera error with', JSON.stringify(constraints), err.name, err.message);
+          if ((err.name == 'NotReadableError' || err.name == 'NotFoundError') && _currentCamIndex + 1 < _cams.length) {
+            _currentCamIndex += 1;
+            console.log(`Camera ${camIndex} failed, trying camera ${_currentCamIndex}`);
+            Recv._tryCamera(_currentCamIndex);
+            return;
+          }
+          if (err.name == 'NotReadableError') {
+            Recv.set_error("Camera is busy. Please close other apps using the camera (Zoom, Teams, Camera app) and refresh.");
+          } else if (err.name == 'NotFoundError') {
+            Recv.set_error("No camera found. Please connect a camera and refresh.");
+          } else if (err.name == 'NotAllowedError') {
+            Recv.set_error("Camera permission denied. Please allow camera access and refresh.");
+          } else if (err.name == 'OverconstrainedError') {
+            // constraints too strict, try simpler
+            Recv._startCamera({ audio: false, video: true }, camIndex);
+          } else {
+            Recv.set_error("Camera error: " + err.message);
+          }
+        });
+    },
+
+    switchCamera: function () {
+      if (_cams.length < 2) {
+        console.log('Only one camera available');
+        return;
+      }
+      // Stop current stream
+      Recv._stopCamera();
+      // Cycle to next camera
+      _currentCamIndex = (_currentCamIndex + 1) % _cams.length;
+      console.log(`Switching to camera ${_currentCamIndex}: ${_cams[_currentCamIndex].label || '(no label)'}`);
+      Recv._tryCamera(_currentCamIndex);
+    },
+
     init_video: function (video) {
       _video = video;
       window.addEventListener('resize', _updateCrosshairPositions);
@@ -228,58 +334,9 @@ var Recv = function () {
         return Recv.set_error('mediaDevices not supported? :(');
       }
 
-      var _cams = [];
-      var _currentCamIndex = 0;
-
-      var startCamera = function (constraints, camIndex) {
-        navigator.mediaDevices.getUserMedia(constraints)
-          .then(localMediaStream => {
-            if ('srcObject' in video) {
-              video.srcObject = localMediaStream;
-            } else {
-              video.src = URL.createObjectURL(localMediaStream);
-            }
-            video.play();
-            video.requestVideoFrameCallback(Recv.on_frame);
-            console.log(`Camera ${camIndex} started successfully`);
-          })
-          .catch(err => {
-            console.error('Camera error with', JSON.stringify(constraints), err.name, err.message);
-            if ((err.name == 'NotReadableError' || err.name == 'NotFoundError') && _currentCamIndex + 1 < _cams.length) {
-              _currentCamIndex += 1;
-              console.log(`Camera ${camIndex} failed, trying camera ${_currentCamIndex}`);
-              tryCamera(_currentCamIndex);
-              return;
-            }
-            if (err.name == 'NotReadableError') {
-              Recv.set_error("Camera is busy. Please close other apps using the camera (Zoom, Teams, Camera app) and refresh.");
-            } else if (err.name == 'NotFoundError') {
-              Recv.set_error("No camera found. Please connect a camera and refresh.");
-            } else if (err.name == 'NotAllowedError') {
-              Recv.set_error("Camera permission denied. Please allow camera access and refresh.");
-            } else if (err.name == 'OverconstrainedError') {
-              // constraints too strict, try simpler
-              startCamera({ audio: false, video: true }, camIndex);
-            } else {
-              Recv.set_error("Camera error: " + err.message);
-            }
-          });
-      };
-
-      function tryCamera(index) {
-        if (index >= _cams.length) {
-          Recv.set_error("All cameras failed to start.");
-          return;
-        }
-        var cam = _cams[index];
-        console.log(`Trying camera ${index}: ${cam.label || '(no label)'} (deviceId: ${cam.deviceId.substring(0, 8)}...)`);
-        startCamera({
-          audio: false,
-          video: {
-            deviceId: { exact: cam.deviceId }
-          }
-        }, index);
-      }
+      // Reset camera list
+      _cams = [];
+      _currentCamIndex = 0;
 
       // enumerate cameras first for diagnostics, then start with basic request
       navigator.mediaDevices.enumerateDevices().then(devices => {
@@ -306,10 +363,10 @@ var Recv = function () {
         }
         var tryOrder = physicalIndices.concat(virtualIndices);
         _currentCamIndex = tryOrder[0] || 0;
-        tryCamera(_currentCamIndex);
+        Recv._tryCamera(_currentCamIndex);
       }).catch(err => {
         console.log('enumerateDevices error, trying camera directly', err);
-        startCamera({ audio: false, video: true }, 0);
+        Recv._startCamera({ audio: false, video: true }, 0);
       });
     },
 
@@ -581,6 +638,56 @@ var Recv = function () {
 
     set_title: function (msg) {
       document.title = "Cimbar: " + msg;
+    },
+
+    startCamera: function () {
+      var video = Recv._videoEl;
+      if (!video) {
+        console.error('Video element not found');
+        return;
+      }
+      // Hide the start overlay
+      var overlay = document.getElementById('start-overlay');
+      if (overlay) overlay.classList.add('hidden');
+      // Init camera (triggers permission dialog via user gesture)
+      Recv.init_video(video);
+    },
+
+    toggleDebugPanel: function () {
+      var panel = document.getElementById('debug-panel');
+      var backdrop = document.getElementById('debug-backdrop');
+      if (!panel) return;
+      var isOpen = panel.classList.contains('open');
+      if (isOpen) {
+        panel.classList.remove('open');
+        if (backdrop) backdrop.classList.remove('open');
+      } else {
+        Recv.refreshLog();
+        panel.classList.add('open');
+        if (backdrop) backdrop.classList.add('open');
+      }
+    },
+
+    refreshLog: function () {
+      var el = document.getElementById('debug-log');
+      if (!el) return;
+      var html = '';
+      for (var i = 0; i < _logBuffer.length; i++) {
+        var line = _logBuffer[i];
+        html += '<div class="log-' + line.type + '">' + _escapeHtml(line.text) + '</div>';
+      }
+      el.innerHTML = html;
+      el.scrollTop = el.scrollHeight;
+    },
+
+    clearLog: function () {
+      _logBuffer.length = 0;
+      var el = document.getElementById('debug-log');
+      if (el) el.innerHTML = '';
     }
   };
 }();
+
+function _escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}

@@ -149,6 +149,8 @@ var Recv = function () {
   var _workers = [];
   var _nextWorker = 0;
   var _workerReady;
+  var _captureCanvas = null;
+  var _captureCtx = null;
   var _cams = [];
   var _currentCamIndex = 0;
   var _framesInFlight = 0;
@@ -186,34 +188,33 @@ var Recv = function () {
       return;
 
     var modeAspect = _getModeAspectRatio(_mode);
-
-    var windowW = window.innerWidth;
-    var windowH = window.innerHeight;
+    var container = document.getElementById('container');
+    if (!container) return;
+    var contW = container.clientWidth;
+    var contH = container.clientHeight;
     var camAspect = _video.videoWidth / _video.videoHeight;
-    var windowAspect = windowW / windowH;
+    var contAspect = contW / contH;
 
-    var vidW = windowW;
-    var vidH = windowH;
-    if (camAspect > windowAspect)  // black bars top/bottom
+    var vidW = contW;
+    var vidH = contH;
+    if (camAspect > contAspect)  // black bars top/bottom
       vidH = vidW / camAspect;
     else  // black bars left/right
       vidW = vidH * camAspect;
 
     var offsetY;
     var offsetX;
-    if (windowH > windowW) {
+    if (contH > contW) {
       // portrait
-      offsetY = (windowH - (vidW * modeAspect)) / 2;
-      offsetX = (windowW - vidW) / 2;
+      offsetY = (contH - (vidW * modeAspect)) / 2;
+      offsetX = (contW - vidW) / 2;
     }
     else {
-      offsetY = (windowH - vidH) / 2;
-      offsetX = (windowW - (vidH * modeAspect)) / 2;
+      offsetY = (contH - vidH) / 2;
+      offsetX = (contW - (vidH * modeAspect)) / 2;
     }
 
-    var logme = "crosshair offsets now " + offsetX + ", " + offsetY;
-    //Recv.set_error(logme);
-    console.log(logme);
+    console.log('crosshair offsets now ' + offsetX + ', ' + offsetY);
 
     var xh1 = document.getElementById("crosshair1");
     var xh2 = document.getElementById("crosshair2");
@@ -284,12 +285,14 @@ var Recv = function () {
       // iOS has strict constraint handling; avoid 'exact' deviceId on iOS
       var constraints;
       if (isIOS()) {
-        // On iOS, try facingMode first, then fall back to basic video
-        var isBack = cam.label && cam.label.toLowerCase().indexOf('back') !== -1;
+        // On iOS, camera labels are localized (e.g. '后置摄像头' in Chinese, 'Rückkamera' in German)
+        // so label matching for 'back'/'rear' is unreliable. iOS always returns cameras in fixed
+        // order: front=0, back=1. We use the index to decide which facingMode to request.
+        // Even indices (0,2,...) → rear camera; Odd indices (1,3,...) → front camera.
         constraints = {
           audio: false,
           video: {
-            facingMode: isBack ? 'environment' : 'user'
+            facingMode: index % 2 === 0 ? 'environment' : 'user'
           }
         };
       } else {
@@ -345,11 +348,9 @@ var Recv = function () {
           video.play();
           video.requestVideoFrameCallback(Recv.on_frame);
           console.log('[CameraDiag] Camera ' + camIndex + ' started successfully');
-          // Show camera switch button if multiple cameras
-          var btn = document.getElementById('cam-switch-btn');
-          if (btn && _cams.length > 1) {
-            btn.style.display = 'flex';
-          }
+          // Re-enumerate now that permission is granted (iOS hides labels before permission)
+          // This populates the camera list and updates the UI selector.
+          Recv.refreshCameraList();
         })
         .catch(function(err) {
           clearTimeout(timeoutId);
@@ -402,8 +403,108 @@ var Recv = function () {
       Recv._stopCamera();
       // Cycle to next camera
       _currentCamIndex = (_currentCamIndex + 1) % _cams.length;
-      console.log(`Switching to camera ${_currentCamIndex}: ${_cams[_currentCamIndex].label || '(no label)'}`);
+      console.log('Switching to camera ' + _currentCamIndex + ': ' + (_cams[_currentCamIndex].label || '(no label)'));
       Recv._tryCamera(_currentCamIndex);
+    },
+
+    // Toggle the camera list dropdown open/closed
+    toggleCameraList: function () {
+      var panel = document.getElementById('cam-list-panel');
+      var arrow = document.getElementById('cam-arrow');
+      if (!panel) return;
+      if (panel.classList.contains('open')) {
+        panel.classList.remove('open');
+        if (arrow) arrow.classList.remove('open');
+      } else {
+        Recv.refreshCameraList();
+        panel.classList.add('open');
+        if (arrow) arrow.classList.add('open');
+      }
+    },
+
+    // Close the camera list dropdown
+    closeCameraList: function () {
+      var panel = document.getElementById('cam-list-panel');
+      var arrow = document.getElementById('cam-arrow');
+      if (panel) panel.classList.remove('open');
+      if (arrow) arrow.classList.remove('open');
+    },
+
+    // Enumerate all video devices and update the camera list UI
+    refreshCameraList: function () {
+      var refreshBtn = document.getElementById('cam-refresh-btn');
+      if (refreshBtn) refreshBtn.classList.add('loading');
+
+      navigator.mediaDevices.enumerateDevices().then(function(devices) {
+        var allCams = devices.filter(function(d) { return d.kind == 'videoinput'; });
+        if (allCams.length > 0) {
+          var oldLen = _cams.length;
+          _cams = allCams;
+          if (allCams.length !== oldLen) {
+            console.log('[CameraDiag] Camera list updated: ' + allCams.length + ' cameras');
+            allCams.forEach(function(cam, i) {
+              console.log('  ' + i + ': ' + (cam.label || '(no label)'));
+            });
+          }
+        }
+        Recv.updateCameraListUI();
+      }).catch(function(err) {
+        console.error('enumerateDevices error:', err);
+      }).then(function() {
+        if (refreshBtn) refreshBtn.classList.remove('loading');
+      });
+    },
+
+    // Update the camera selector UI to reflect _cams and _currentCamIndex
+    updateCameraListUI: function () {
+      var itemsEl = document.getElementById('cam-list-items');
+      var labelEl = document.getElementById('cam-current-label');
+      if (!itemsEl) return;
+
+      var html = '';
+      for (var ci = 0; ci < _cams.length; ci++) {
+        var cam = _cams[ci];
+        var camName = cam.label || ('Camera ' + (ci + 1));
+        var checked = ci === _currentCamIndex ? ' active' : '';
+        var facingInfo = '';
+        if (isIOS()) {
+          facingInfo = '<span class="cam-info">' + (ci % 2 === 0 ? 'rear' : 'front') + '</span>';
+        }
+        html += '<div class="cam-list-item" data-index="' + ci + '">' +
+          '<span class="check' + checked + '">✓</span>' +
+          '<span class="cam-label">' + _escapeHtml(camName) + '</span>' +
+          facingInfo +
+          '</div>';
+      }
+      itemsEl.innerHTML = html;
+
+      // Attach click handlers
+      var items = itemsEl.querySelectorAll('.cam-list-item');
+      for (var ii = 0; ii < items.length; ii++) {
+        items[ii].addEventListener('click', (function(idx) {
+          return function() { Recv.selectCamera(idx); };
+        })(ii));
+      }
+
+      // Update current camera label in the button bar
+      if (labelEl) {
+        var cur = _cams[_currentCamIndex];
+        labelEl.textContent = cur && cur.label ? cur.label : ('Camera ' + (_currentCamIndex + 1));
+      }
+    },
+
+    // Select a specific camera by index and switch to it
+    selectCamera: function (index) {
+      if (index >= _cams.length || index < 0) return;
+      if (index === _currentCamIndex) {
+        Recv.closeCameraList();
+        return;
+      }
+      Recv._stopCamera();
+      _currentCamIndex = index;
+      console.log('Selecting camera ' + index + ': ' + (_cams[index].label || '(no label)'));
+      Recv._tryCamera(_currentCamIndex);
+      Recv.closeCameraList();
     },
 
     init_video: function (video) {
@@ -431,12 +532,12 @@ var Recv = function () {
           console.log('Camera ' + i + ': ' + (cam.label || '(no label)'));
         });
 
-        // On iOS, if enumerateDevices returns 0 or all labels are empty, try basic getUserMedia
+        // On iOS, if enumerateDevices returns 0 or all labels are empty, request rear camera directly
         var allEmptyLabels = _cams.length > 0 && _cams.every(function(c) { return !c.label; });
         if (_cams.length == 0 || (isIOS() && allEmptyLabels)) {
           if (isIOS()) {
-            console.log('iOS: no labeled cameras found, trying basic video request');
-            Recv._startCamera({ audio: false, video: true }, 0);
+            console.log('iOS: no labeled cameras found, trying rear camera');
+            Recv._startCamera({ audio: false, video: { facingMode: 'environment' } }, 0);
             return;
           }
           Recv.set_error("No camera detected. Please connect a camera and refresh.");
@@ -467,7 +568,9 @@ var Recv = function () {
         Recv._tryCamera(_currentCamIndex);
       }).catch(function(err) {
         console.log('enumerateDevices error, trying camera directly', err);
-        Recv._startCamera({ audio: false, video: true }, 0);
+        // Rear camera preferred on iOS, basic video elsewhere
+        var fallbackConstraints = isIOS() ? { audio: false, video: { facingMode: 'environment' } } : { audio: false, video: true };
+        Recv._startCamera(fallbackConstraints, 0);
       });
     },
 
@@ -589,7 +692,30 @@ var Recv = function () {
           let mode = _mode || modeVals[_counter % modeVals.length];
           _workers[_nextWorker].postMessage({ type: 'proc', pixels: buff, format: format, width: width, height: height, mode: mode }, [buff.buffer]);
         } catch (e) {
-          console.log(e);
+          // VideoFrame API not available (common on older iOS / WKWebView).
+          // Fall back to Canvas 2D capture.
+          console.warn('VideoFrame failed, using Canvas fallback:', e.message);
+          Recv.set_HTML("errorbox", 'Canvas fallback', true);
+          try {
+            if (!_captureCanvas) {
+              _captureCanvas = document.createElement('canvas');
+              _captureCtx = _captureCanvas.getContext('2d', { willReadFrequently: true });
+            }
+            var cw = _video.videoWidth;
+            var ch = _video.videoHeight;
+            if (cw > 0 && ch > 0) {
+              _captureCanvas.width = cw;
+              _captureCanvas.height = ch;
+              _captureCtx.drawImage(_video, 0, 0);
+              var imgData = _captureCtx.getImageData(0, 0, cw, ch);
+              var fmt = 'RGBA';
+              var md = _mode || modeVals[_counter % modeVals.length];
+              _workers[_nextWorker].postMessage({ type: 'proc', pixels: imgData.data, format: fmt, width: cw, height: ch, mode: md }, [imgData.data.buffer]);
+            }
+          } catch (e2) {
+            console.error('Canvas fallback also failed:', e2);
+            Recv.set_HTML("errorbox", 'Frame error: ' + e2.message, true);
+          }
         }
         _nextWorker += 1;
       }

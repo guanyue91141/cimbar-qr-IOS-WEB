@@ -5,14 +5,7 @@
   <title>Cimbar Decoder</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Cimbar Recv">
-  <meta name="theme-color" content="#000000">
-  <meta name="mobile-web-app-capable" content="yes">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <link rel="manifest" href="pwa-recv.2026-05-09T0146.json">
-  <link rel="apple-touch-icon" href="icon-192x192.png">
   <link rel="icon" type="image/png" href="favicon.ico">
 </head>
 
@@ -66,21 +59,22 @@
     }
 
     #container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: -100;
+      position: relative;
+      width: 92%;
+      max-width: 520px;
+      aspect-ratio: 4 / 3;
+      margin: 10px auto 0;
+      border-radius: 16px;
       overflow: hidden;
-      /* Hide scrollbars */
+      background: #000;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+      z-index: 0;
     }
 
     video {
       height: 100%;
       width: 100%;
-      z-index: -100;
-      background-size: cover;
+      object-fit: cover;
       transition: 1s opacity;
     }
 
@@ -89,25 +83,179 @@
       text-shadow: 1px 1px 1px green;
     }
 
+    /* Camera selector bar */
+    #cam-selector-bar {
+      position: relative;
+      width: 92%;
+      max-width: 520px;
+      margin: 10px auto 0;
+      z-index: 3;
+    }
+
+    #cam-selector-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 14px;
+      font-family: sans-serif;
+      cursor: pointer;
+      touch-action: manipulation;
+      pointer-events: auto;
+      transition: background 0.2s;
+    }
+
+    #cam-selector-btn:active {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    #cam-selector-btn .label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #cam-selector-btn .arrow {
+      transition: transform 0.25s;
+      font-size: 12px;
+      opacity: 0.6;
+    }
+
+    #cam-selector-btn .arrow.open {
+      transform: rotate(180deg);
+    }
+
+    /* Camera dropdown list */
+    #cam-list-panel {
+      display: none;
+      margin-top: 4px;
+      background: rgba(30, 30, 35, 0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      overflow: hidden;
+      pointer-events: auto;
+    }
+
+    #cam-list-panel.open {
+      display: block;
+    }
+
+    .cam-list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 14px;
+      font-family: sans-serif;
+      cursor: pointer;
+      touch-action: manipulation;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      transition: background 0.15s;
+    }
+
+    .cam-list-item:last-child {
+      border-bottom: none;
+    }
+
+    .cam-list-item:active {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .cam-list-item .check {
+      color: #4cd964;
+      font-size: 16px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .cam-list-item .check.active {
+      opacity: 1;
+    }
+
+    .cam-list-item .cam-label {
+      flex: 1;
+      margin-left: 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .cam-list-item .cam-info {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.3);
+      margin-left: auto;
+      padding-right: 8px;
+    }
+
+    #cam-refresh-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 13px;
+      font-family: sans-serif;
+      cursor: pointer;
+      touch-action: manipulation;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      transition: color 0.2s;
+    }
+
+    #cam-refresh-btn:active {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    #cam-refresh-btn .spinner {
+      display: none;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-top-color: rgba(255, 255, 255, 0.7);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    #cam-refresh-btn.loading .spinner {
+      display: inline-block;
+    }
+
+    #cam-refresh-btn.loading .refresh-text {
+      display: none;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     #progress_bars {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      margin-bottom: 1vh;
+      position: relative;
+      width: 92%;
+      max-width: 520px;
+      margin: 10px auto 0;
+      z-index: 2;
     }
 
     .progress {
       display: block;
-      height: 1.2vh;
-      margin-bottom: 1vh;
-      background-color: white;
-      border-top: 0.2vh inset navy;
-      border-bottom: 0.4vh inset navy;
-      border-right: 0.3vh inset navy;
-      border-radius: 0 0.5vh 0.5vh 0;
+      height: 6px;
+      margin-bottom: 4px;
+      background: linear-gradient(90deg, #4cd964, #34c759);
+      border-radius: 4px;
       max-width: 100%;
       width: 0;
+      transition: width 0.3s ease;
+      box-shadow: 0 0 8px rgba(76, 217, 100, 0.4);
     }
 
     .crosshairs {
@@ -123,59 +271,27 @@
     }
 
     #crosshair1 {
-      position: fixed;
+      position: absolute;
       top: 15%;
       right: 20%;
       width: min(5%, 40px);
       height: min(5%, 40px);
-      z-index: -50;
+      z-index: 1;
       border-right: clamp(2px, 0.5vw, 5px) groove;
       border-top: clamp(2px, 0.5vw, 5px) groove;
       box-shadow: inset 0 0 0 clamp(2px, 0.4vw, 4px) #555;
     }
 
     #crosshair2 {
-      position: fixed;
+      position: absolute;
       bottom: 20%;
       left: 15%;
       width: min(5%, 40px);
       height: min(5%, 40px);
-      z-index: -50;
+      z-index: 1;
       border-left: clamp(2px, 0.5vw, 5px) groove;
       border-bottom: clamp(2px, 0.5vw, 5px) groove;
       box-shadow: inset 0 0 0 clamp(2px, 0.4vw, 4px) #555;
-    }
-
-    /* Camera switch button - bottom center */
-    #cam-switch-btn {
-      position: fixed;
-      bottom: max(20px, env(safe-area-inset-bottom, 0px) + 10px);
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10;
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      background: rgba(0, 0, 0, 0.5);
-      border: 2px solid rgba(255, 255, 255, 0.6);
-      color: white;
-      font-size: 24px;
-      cursor: pointer;
-      touch-action: manipulation;
-      pointer-events: auto;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      transition: opacity 0.3s;
-      opacity: 0.7;
-    }
-
-    #cam-switch-btn:hover,
-    #cam-switch-btn:active {
-      opacity: 1;
-      background: rgba(0, 0, 0, 0.7);
     }
 
     /* Start camera overlay */
@@ -373,7 +489,7 @@
     }
 
     #nav-container:focus-within {
-      z-index: 1;
+      z-index: 10;
     }
 
     #nav-content,
@@ -400,6 +516,7 @@
       top: 0;
       width: 100%;
       height: 100%;
+      z-index: 5;
       pointer-events: none;
     }
 
@@ -431,7 +548,7 @@
       justify-content: center;
       height: 60px;
       width: 30px;
-      margin-left: 15px;
+      margin-left: max(15px, env(safe-area-inset-left));
       cursor: pointer;
       pointer-events: auto;
       touch-action: manipulation;
@@ -643,6 +760,27 @@
 <div id="container">
     <video id="video" playsinline webkit-playsinline muted>
     </video>
+    <div id="crosshair1" class="crosshairs"></div>
+    <div id="crosshair2" class="crosshairs"></div>
+  </div>
+
+  <!-- Camera selector -->
+  <div id="cam-selector-bar">
+    <button id="cam-selector-btn" onclick="Recv.toggleCameraList()">
+      <span class="label">📷 <span id="cam-current-label">Camera</span></span>
+      <span class="arrow" id="cam-arrow">▾</span>
+    </button>
+    <div id="cam-list-panel">
+      <div id="cam-list-items"></div>
+      <div id="cam-refresh-btn" onclick="Recv.refreshCameraList()">
+        <span class="spinner"></span>
+        <span class="refresh-text">⟳ Refresh list</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="progress_bars">
+    <div class="progress"></div>
   </div>
 
   <!-- Start camera overlay (shown until user taps) -->
@@ -674,14 +812,6 @@
   <!-- Floating debug button -->
   <button id="debug-panel-btn" onclick="Recv.toggleDebugPanel()" title="Debug log">🐛</button>
 
-  <div id="crosshair1" class="crosshairs"></div>
-  <div id="crosshair2" class="crosshairs"></div>
-
-  <!-- Camera switch button (visible on mobile) -->
-  <button id="cam-switch-btn" onclick="Recv.switchCamera()" title="Switch camera" style="display:none;">
-    ↺
-  </button>
-
   <div id="nav-container" class="mode-auto">
     <div class="bg" onclick="Recv.blurNav();"></div>
     <button id="nav-button" tabindex="0" onclick="Recv.clickNav();">
@@ -699,6 +829,7 @@
         </li>
         <li class="small"><a href="javascript:void(0)" onclick="Recv.showDebug()">Debug</a></li>
         <li class="small"><a href="javascript:void(0)" onclick="Recv.toggleFullscreen()">Fullscreen</a></li>
+        <li class="small"><a href="javascript:void(0)" onclick="Recv.toggleCameraList()">Camera List</a></li>
         <li class="small"><a href="https://github.com/sz3/libcimbar">github</a></li>
         <li class="small"><a href="https://github.com/sz3/cfc/releases/latest">android app</a></li>
       </ul>
@@ -713,10 +844,6 @@
       <div class="statusbox" id="framesInFlight"></div>
       <div class="statusbox" id="tdec">2026-05-09T0146</div>
     </div>
-  </div>
-
-  <div id="progress_bars">
-    <div class="progress"></div>
   </div>
 
   <script src="recv.2026-05-09T0146.js"></script>
@@ -743,9 +870,19 @@
     }
     console.log('[CameraDiag] Mobile:', isMobile, 'Workers:', numWorkers);
     Recv.init_ww(numWorkers);
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./recv-sw.js');
-    }
+
+    // --- Force online-only (PWA removed, must have network) ---
+    (function() {
+      var el = document.createElement('div');
+      el.id = 'offline-overlay';
+      el.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;padding:30px;';
+      el.innerHTML = '<h1 style="font-size:24px;margin-bottom:16px;font-weight:300;">No Internet Connection</h1><p style="font-size:14px;opacity:0.7;max-width:280px;line-height:1.5;">This app requires an internet connection. Please check your network and try again.</p>';
+      el.style.display = navigator.onLine ? 'none' : 'flex';
+      document.body.appendChild(el);
+      window.addEventListener('online', function() { el.style.display = 'none'; });
+      window.addEventListener('offline', function() { el.style.display = 'flex'; });
+    })();
+
     var video = document.querySelector('#video');
 
     // Remembers video element for later use when user taps Start

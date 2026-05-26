@@ -228,7 +228,7 @@ var Recv = function () {
         return Recv.set_error('mediaDevices not supported? :(');
       }
 
-      var tryConstraints = function (constraints) {
+      var startCamera = function (constraints) {
         navigator.mediaDevices.getUserMedia(constraints)
           .then(localMediaStream => {
             if ('srcObject' in video) {
@@ -240,25 +240,35 @@ var Recv = function () {
             video.requestVideoFrameCallback(Recv.on_frame);
           })
           .catch(err => {
-            console.error('Camera error with', JSON.stringify(constraints), err);
-            // fallback: try with basic constraints
-            if (constraints.video.facingMode || constraints.video.width || constraints.video.height) {
-              console.log('fallback to basic constraints');
-              tryConstraints({ audio: false, video: true });
+            console.error('Camera error with', JSON.stringify(constraints), err.name, err.message);
+            if (err.name == 'NotReadableError') {
+              Recv.set_error("Camera is busy. Please close other apps using the camera (Zoom, Teams, Camera app) and refresh.");
+            } else if (err.name == 'NotFoundError') {
+              Recv.set_error("No camera found. Please connect a camera and refresh.");
+            } else if (err.name == 'NotAllowedError') {
+              Recv.set_error("Camera permission denied. Please allow camera access and refresh.");
+            } else if (err.name == 'OverconstrainedError') {
+              // constraints too strict, try simpler
+              startCamera({ audio: false, video: true });
             } else {
-              Recv.set_error("Failed to initialize camera. " + err.message);
+              Recv.set_error("Camera error: " + err.message);
             }
           });
       };
 
-      tryConstraints({
-        audio: false,
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: { ideal: 'environment' },
-          frameRate: { ideal: 15 },
+      // enumerate cameras first for diagnostics, then start with basic request
+      navigator.mediaDevices.enumerateDevices().then(devices => {
+        var cams = devices.filter(d => d.kind == 'videoinput');
+        console.log('Found cameras:', cams.length);
+        if (cams.length == 0) {
+          Recv.set_error("No camera detected. Please connect a camera and refresh.");
+          return;
         }
+        // start with minimal constraints for maximum compatibility
+        startCamera({ audio: false, video: true });
+      }).catch(err => {
+        console.log('enumerateDevices error, trying camera directly', err);
+        startCamera({ audio: false, video: true });
       });
     },
 

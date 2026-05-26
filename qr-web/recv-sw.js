@@ -1,5 +1,5 @@
 
-var _cacheName = 'cimbar-recv-js-v2026-05-09T0146';
+var _cacheName = 'cimbar-recv-js-v2026-05-25-fix1';
 var _cacheFiles = [
   '/',
   '/recv.html',
@@ -35,11 +35,11 @@ self.addEventListener('fetch', function (e) {
 
 // clean old caches
 self.addEventListener('activate', function (e) {
-  e.waitUntil(function () {
+  e.waitUntil(
     caches.keys().then(function (names) {
       for (var i in names)
         if (names[i] != _cacheName)
           caches.delete(names[i]);
-    });
-  });
+    })
+  );
 });

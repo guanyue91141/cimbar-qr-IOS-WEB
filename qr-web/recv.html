@@ -641,7 +641,7 @@
   </style>
 
 <div id="container">
-    <video id="video" autoplay="true" playsinline="true" muted="true">
+    <video id="video" playsinline webkit-playsinline muted>
     </video>
   </div>
 
@@ -651,6 +651,9 @@
     <p>Tap to start scanning cimbar codes</p>
     <button id="start-btn" onclick="Recv.startCamera()">▶</button>
     <div id="start-btn-label">Start Camera</div>
+    <div id="ios-hint" style="display:none; margin-top:24px; font-size:12px; opacity:0.5; max-width:260px; line-height:1.4;">
+      If no permission prompt appears, try Safari instead, or ensure the page is served over <b>HTTPS</b>.
+    </div>
   </div>
 
   <!-- Debug panel backdrop -->
@@ -660,7 +663,10 @@
   <div id="debug-panel">
     <div id="debug-panel-header">
       <span>Console Log</span>
-      <button onclick="Recv.clearLog()">Clear</button>
+      <div>
+        <button onclick="Recv.copyLog()" style="margin-right:6px;">Copy</button>
+        <button onclick="Recv.clearLog()">Clear</button>
+      </div>
     </div>
     <div id="debug-log"></div>
   </div>
@@ -717,6 +723,17 @@
   <script src="zstd.2026-05-09T0146.js"></script>
 
   <script type="text/javascript">
+    // --- iOS Chrome Debug Diagnostics ---
+    console.log('[CameraDiag] Protocol:', location.protocol);
+    console.log('[CameraDiag] isSecureContext:', window.isSecureContext);
+    console.log('[CameraDiag] UserAgent:', navigator.userAgent);
+    console.log('[CameraDiag] mediaDevices exists:', !!navigator.mediaDevices);
+    console.log('[CameraDiag] mediaDevices.getUserMedia exists:', !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
+    // Warn if not HTTPS (iOS Chrome will NOT show camera prompt)
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      console.error('[CameraDiag] ⚠️ NOT HTTPS — iOS Chrome will NEVER show camera permission prompt! Serve over HTTPS.');
+    }
+
     // Detect mobile and reduce worker count accordingly
     var isMobile = /Mobi|Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
     var numWorkers = isMobile ? 2 : 4;
@@ -724,7 +741,7 @@
       numWorkers = Math.min(navigator.hardwareConcurrency - 1, isMobile ? 3 : 4);
       numWorkers = Math.max(1, numWorkers);
     }
-    console.log('Mobile:', isMobile, 'Workers:', numWorkers);
+    console.log('[CameraDiag] Mobile:', isMobile, 'Workers:', numWorkers);
     Recv.init_ww(numWorkers);
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./recv-sw.js');
@@ -734,9 +751,15 @@
     // Remembers video element for later use when user taps Start
     Recv._videoEl = video;
 
+    // Show iOS hint if on Apple mobile device (Chrome/Safari on iPhone/iPad)
+    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      var iosHint = document.getElementById('ios-hint');
+      if (iosHint) iosHint.style.display = 'block';
+    }
+
     var Module = {};
     Module.onRuntimeInitialized = () => {
-      console.log('WASM loaded, waiting for user to tap Start');
+      console.log('[CameraDiag] WASM loaded, waiting for user to tap Start');
       // Camera is NOT auto-started — user must tap the start button
       // This ensures mobile browsers show permission dialog on user gesture
     };

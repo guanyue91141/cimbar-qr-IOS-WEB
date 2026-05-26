@@ -1,5 +1,11 @@
 {
+  "scripts": {
+    "start": "http-server -S -p 8081 --cors -C cert.pem -K key.pem"
+  },
   "dependencies": {
     "http-server": "^14.1.1"
+  },
+  "devDependencies": {
+    "selfsigned": "^5.5.0"
   }
 }

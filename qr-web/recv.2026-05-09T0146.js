@@ -25,6 +25,22 @@ var _maxLogLines = 200;
   };
 })();
 
+// getUserMedia polyfill for older browsers (including some iOS versions)
+if (navigator.mediaDevices === undefined) {
+  navigator.mediaDevices = {};
+}
+if (navigator.mediaDevices.getUserMedia === undefined) {
+  navigator.mediaDevices.getUserMedia = function(constraints) {
+    var getUserMedia = navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+    if (!getUserMedia) {
+      return Promise.reject(new Error('getUserMedia is not implemented in this browser'));
+    }
+    return new Promise(function(resolve, reject) {
+      getUserMedia.call(navigator, constraints, resolve, reject);
+    });
+  };
+}
+
 var Sink = function () {
 
   var _fountainBuff = undefined;
@@ -263,19 +279,64 @@ var Recv = function () {
         return;
       }
       var cam = _cams[index];
-      console.log(`Trying camera ${index}: ${cam.label || '(no label)'} (deviceId: ${cam.deviceId.substring(0, 8)}...)`);
-      Recv._startCamera({
-        audio: false,
-        video: {
-          deviceId: { exact: cam.deviceId }
-        }
-      }, index);
+      console.log('Trying camera ' + index + ': ' + (cam.label || '(no label)') + ' (deviceId: ' + cam.deviceId.substring(0, 8) + '...)');
+
+      // iOS has strict constraint handling; avoid 'exact' deviceId on iOS
+      var constraints;
+      if (isIOS()) {
+        // On iOS, try facingMode first, then fall back to basic video
+        var isBack = cam.label && cam.label.toLowerCase().indexOf('back') !== -1;
+        constraints = {
+          audio: false,
+          video: {
+            facingMode: isBack ? 'environment' : 'user'
+          }
+        };
+      } else {
+        constraints = {
+          audio: false,
+          video: {
+            deviceId: { exact: cam.deviceId }
+          }
+        };
+      }
+      Recv._startCamera(constraints, index);
     },
 
     _startCamera: function (constraints, camIndex) {
       var video = _video;
+      // Store AbortError retry count per camera attempt
+      if (this._abortRetry === undefined) this._abortRetry = {};
+      var abortKey = 'cam_' + camIndex;
+      if (this._abortRetry[abortKey] === undefined) this._abortRetry[abortKey] = 0;
+
+      var timeoutMs = isIOS() ? 10000 : 15000; // iOS can be slower to show permission prompt
+      var cameraStarted = false;
+
+      var timeoutId = setTimeout(function() {
+        if (!cameraStarted) {
+          console.warn('[CameraDiag] Camera start timed out after ' + timeoutMs + 'ms (iOS Chrome/WKWebView known issue)');
+          Recv.set_error('Camera timed out. On iOS Chrome, please ensure you are on iOS 14.3+ and try using Safari if the issue persists.');
+        }
+      }, timeoutMs);
+
+      // iOS hack: temporarily add controls attribute — known workaround for iOS
+      // where video element sometimes doesn't initialize the playback pipeline
+      if (isIOS() && !video.hasAttribute('controls')) {
+        video.setAttribute('controls', 'true');
+        setTimeout(function() { video.removeAttribute('controls'); }, 100);
+      }
+
       navigator.mediaDevices.getUserMedia(constraints)
-        .then(localMediaStream => {
+        .then(function(localMediaStream) {
+          clearTimeout(timeoutId);
+          cameraStarted = true;
+          // IMPORTANT: Set autoplay/playsinline DYNAMICALLY after getUserMedia succeeds.
+          // Having autoplay in the HTML <video> tag can prevent Chrome on iOS from
+          // showing the permission prompt (Chrome autoplay policy conflict).
+          video.setAttribute('autoplay', '');
+          video.setAttribute('playsinline', '');
+          video.muted = true;
           if ('srcObject' in video) {
             video.srcObject = localMediaStream;
           } else {
@@ -283,18 +344,30 @@ var Recv = function () {
           }
           video.play();
           video.requestVideoFrameCallback(Recv.on_frame);
-          console.log(`Camera ${camIndex} started successfully`);
+          console.log('[CameraDiag] Camera ' + camIndex + ' started successfully');
           // Show camera switch button if multiple cameras
           var btn = document.getElementById('cam-switch-btn');
           if (btn && _cams.length > 1) {
             btn.style.display = 'flex';
           }
         })
-        .catch(err => {
-          console.error('Camera error with', JSON.stringify(constraints), err.name, err.message);
+        .catch(function(err) {
+          clearTimeout(timeoutId);
+          console.error('[CameraDiag] Camera error with', JSON.stringify(constraints), err.name, err.message);
+
+          // iOS 16.4+ AbortError bug: retry once
+          if (err.name == 'AbortError' && this._abortRetry[abortKey] < 1) {
+            this._abortRetry[abortKey] += 1;
+            console.log('[CameraDiag] AbortError on iOS, retrying once...');
+            setTimeout(function() {
+              Recv._startCamera(constraints, camIndex);
+            }, 500);
+            return;
+          }
+
           if ((err.name == 'NotReadableError' || err.name == 'NotFoundError') && _currentCamIndex + 1 < _cams.length) {
             _currentCamIndex += 1;
-            console.log(`Camera ${camIndex} failed, trying camera ${_currentCamIndex}`);
+            console.log('[CameraDiag] Camera ' + camIndex + ' failed, trying camera ' + _currentCamIndex);
             Recv._tryCamera(_currentCamIndex);
             return;
           }
@@ -303,10 +376,17 @@ var Recv = function () {
           } else if (err.name == 'NotFoundError') {
             Recv.set_error("No camera found. Please connect a camera and refresh.");
           } else if (err.name == 'NotAllowedError') {
-            Recv.set_error("Camera permission denied. Please allow camera access and refresh.");
+            var msg = "Camera permission denied. Please allow camera access and refresh.";
+            if (isIOS()) {
+              msg += " Note: iOS Chrome uses Safari's engine. If still failing, try opening this page in Safari directly, or check iOS Settings > Safari > Camera.";
+            }
+            Recv.set_error(msg);
           } else if (err.name == 'OverconstrainedError') {
             // constraints too strict, try simpler
+            console.log('[CameraDiag] OverconstrainedError, falling back to basic video constraint');
             Recv._startCamera({ audio: false, video: true }, camIndex);
+          } else if (err.name == 'TypeError' || err.message && err.message.indexOf('undefined') !== -1) {
+            Recv.set_error("Camera API not available. On iOS, this requires iOS 14.3 or later. Please use Safari or update your iOS version.");
           } else {
             Recv.set_error("Camera error: " + err.message);
           }
@@ -331,31 +411,52 @@ var Recv = function () {
       window.addEventListener('resize', _updateCrosshairPositions);
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        return Recv.set_error('mediaDevices not supported? :(');
+        var msg = 'mediaDevices not supported? :(';
+        if (isIOS()) {
+          msg = 'Camera API not available on this iOS device. iOS Chrome requires iOS 14.3+. Please use Safari or update iOS.';
+        }
+        return Recv.set_error(msg);
       }
 
       // Reset camera list
       _cams = [];
       _currentCamIndex = 0;
 
-      // enumerate cameras first for diagnostics, then start with basic request
-      navigator.mediaDevices.enumerateDevices().then(devices => {
-        _cams = devices.filter(d => d.kind == 'videoinput');
+      // iOS-specific: enumerateDevices often returns empty labels until permission is granted
+      // So on iOS we may need to start camera first to get real device labels
+      navigator.mediaDevices.enumerateDevices().then(function(devices) {
+        _cams = devices.filter(function(d) { return d.kind == 'videoinput'; });
         console.log('Found cameras:', _cams.length);
-        _cams.forEach((cam, i) => {
-          console.log(`Camera ${i}: ${cam.label || '(no label)'}`);
+        _cams.forEach(function(cam, i) {
+          console.log('Camera ' + i + ': ' + (cam.label || '(no label)'));
         });
-        if (_cams.length == 0) {
+
+        // On iOS, if enumerateDevices returns 0 or all labels are empty, try basic getUserMedia
+        var allEmptyLabels = _cams.length > 0 && _cams.every(function(c) { return !c.label; });
+        if (_cams.length == 0 || (isIOS() && allEmptyLabels)) {
+          if (isIOS()) {
+            console.log('iOS: no labeled cameras found, trying basic video request');
+            Recv._startCamera({ audio: false, video: true }, 0);
+            return;
+          }
           Recv.set_error("No camera detected. Please connect a camera and refresh.");
           return;
         }
+
         // try physical cameras first, skip virtual ones
         var virtualKeywords = ['virtual', 'webcast', 'obs', 'manycam', 'snap', 'xsplit'];
         var physicalIndices = [];
         var virtualIndices = [];
         for (var i = 0; i < _cams.length; i++) {
           var label = (_cams[i].label || '').toLowerCase();
-          if (virtualKeywords.some(kw => label.includes(kw))) {
+          var isVirtual = false;
+          for (var j = 0; j < virtualKeywords.length; j++) {
+            if (label.indexOf(virtualKeywords[j]) !== -1) {
+              isVirtual = true;
+              break;
+            }
+          }
+          if (isVirtual) {
             virtualIndices.push(i);
           } else {
             physicalIndices.push(i);
@@ -364,7 +465,7 @@ var Recv = function () {
         var tryOrder = physicalIndices.concat(virtualIndices);
         _currentCamIndex = tryOrder[0] || 0;
         Recv._tryCamera(_currentCamIndex);
-      }).catch(err => {
+      }).catch(function(err) {
         console.log('enumerateDevices error, trying camera directly', err);
         Recv._startCamera({ audio: false, video: true }, 0);
       });
@@ -678,6 +779,43 @@ var Recv = function () {
       }
       el.innerHTML = html;
       el.scrollTop = el.scrollHeight;
+    },
+
+    copyLog: function () {
+      var text = '';
+      for (var i = 0; i < _logBuffer.length; i++) {
+        text += _logBuffer[i].text + '\n';
+      }
+      if (!text) {
+        console.log('Nothing to copy');
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          console.log('Log copied to clipboard');
+        }).catch(function (err) {
+          console.error('Copy failed: ' + err);
+          Recv._fallbackCopy(text);
+        });
+      } else {
+        Recv._fallbackCopy(text);
+      }
+    },
+
+    _fallbackCopy: function (text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        console.log('Log copied (fallback)');
+      } catch (e) {
+        console.error('Copy failed: ' + e);
+      }
+      document.body.removeChild(ta);
     },
 
     clearLog: function () {

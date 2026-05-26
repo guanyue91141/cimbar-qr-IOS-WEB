@@ -15,3 +15,4 @@
 .idea/
 /.omo
 /qr-web/node_modules
+qr-web/dist/

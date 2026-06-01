@@ -1,20 +1,42 @@
 <!doctype html>
-<html lang="en" data-framework="javascript">
+<html lang="zh-CN" data-framework="javascript">
 
 <head>
-  <title>Cimbar Decoder</title>
+  <title>Cimbar 解码器</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <link rel="icon" type="image/png" href="favicon.ico">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 
 <body>
 
   <style>
+    :root {
+      /* Productivity Tool Color Palette */
+      --color-primary: #0D9488;
+      --color-primary-light: #14B8A6;
+      --color-accent: #F97316;
+      --color-bg: #0F172A;
+      --color-bg-dark: #020617;
+      --color-surface: #1E293B;
+      --color-text: #F0FDFA;
+      --color-text-secondary: #94A3B8;
+      --color-border: #334155;
+      --color-success: #22C55E;
+      --color-warning: #F59E0B;
+      --color-error: #EF4444;
+    }
+
     * {
       margin: 0;
       padding: 0;
+      box-sizing: border-box;
     }
 
     html,
@@ -22,21 +44,21 @@
       height: 100vh;
       height: -webkit-fill-available;
       height: 100dvh;
-      overflow: hidden;
-      overscroll-behavior: none;
     }
 
     body {
-      background-color: white;
-      background-image: linear-gradient(135deg, rgb(0, 0, 0) 65px, transparent 130px),
-        repeating-linear-gradient(135deg, rgb(0, 0, 0) 0px, rgb(153, 197, 206) 1px, transparent 1px, transparent 30px),
-        repeating-linear-gradient(45deg, rgb(0, 0, 0) 0px, rgb(153, 197, 206) 1px, transparent 1px, transparent 30px);
-      background-size: cover;
+      background-color: var(--color-bg-dark);
+      background-image: 
+        radial-gradient(ellipse at top, var(--color-bg) 0%, transparent 50%),
+        radial-gradient(ellipse at bottom right, rgba(13, 148, 136, 0.15) 0%, transparent 50%);
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: var(--color-text);
       /* Safe area insets for notched phones */
       padding-top: env(safe-area-inset-top);
       padding-bottom: env(safe-area-inset-bottom);
       padding-left: env(safe-area-inset-left);
       padding-right: env(safe-area-inset-right);
+      overflow-x: hidden;
     }
 
     /* Prevent text selection and touch callout on mobile */
@@ -53,11 +75,28 @@
       user-select: text;
     }
 
-    @media (prefers-color-scheme: dark) {
-      body {
-        background-color: black;
-        color: white;
-      }
+    /* Header */
+    .app-header {
+      text-align: center;
+      padding: 24px 20px 16px;
+    }
+
+    .app-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 4px;
+      letter-spacing: -0.5px;
+    }
+
+    .app-subtitle {
+      font-size: 14px;
+      color: var(--color-text-secondary);
+      font-weight: 400;
     }
 
     #container {
@@ -65,11 +104,14 @@
       width: 92%;
       max-width: 520px;
       aspect-ratio: 4 / 3;
-      margin: 10px auto 0;
-      border-radius: 16px;
+      margin: 8px auto 0;
+      border-radius: 24px;
       overflow: hidden;
-      background: #000;
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+      background: var(--color-surface);
+      box-shadow: 
+        0 25px 50px -12px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
       z-index: 0;
     }
 
@@ -77,12 +119,12 @@
       height: 100%;
       width: 100%;
       object-fit: cover;
-      transition: 1s opacity;
+      transition: opacity 0.5s ease;
     }
 
     .statusbox {
-      color: white;
-      text-shadow: 1px 1px 1px green;
+      color: var(--color-text);
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     }
 
     /* Camera selector bar */
@@ -90,7 +132,7 @@
       position: relative;
       width: 92%;
       max-width: 520px;
-      margin: 10px auto 0;
+      margin: 20px auto 0;
       z-index: 3;
     }
 
@@ -99,35 +141,55 @@
       align-items: center;
       justify-content: space-between;
       width: 100%;
-      padding: 12px 16px;
-      background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 12px;
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 14px;
-      font-family: sans-serif;
+      padding: 16px 20px;
+      background: rgba(30, 41, 59, 0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      color: var(--color-text);
+      font-size: 15px;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
       cursor: pointer;
       touch-action: manipulation;
       pointer-events: auto;
-      transition: background 0.2s;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    #cam-selector-btn:hover {
+      background: rgba(30, 41, 59, 0.95);
+      border-color: rgba(20, 184, 166, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
     }
 
     #cam-selector-btn:active {
-      background: rgba(255, 255, 255, 0.1);
+      transform: translateY(0);
     }
 
     #cam-selector-btn .label {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+    }
+
+    #cam-selector-btn .camera-icon {
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     #cam-selector-btn .arrow {
-      transition: transform 0.25s;
-      font-size: 12px;
-      opacity: 0.6;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      font-size: 14px;
+      opacity: 0.7;
+      color: var(--color-text-secondary);
     }
 
     #cam-selector-btn .arrow.open {
@@ -137,93 +199,131 @@
     /* Camera dropdown list */
     #cam-list-panel {
       display: none;
-      margin-top: 4px;
-      background: rgba(30, 30, 35, 0.95);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      margin-top: 8px;
+      background: rgba(30, 41, 59, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
+      border-radius: 16px;
       overflow: hidden;
       pointer-events: auto;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
     }
 
     #cam-list-panel.open {
       display: block;
+      animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .cam-list-item {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 16px;
-      color: rgba(255, 255, 255, 0.8);
-      font-size: 14px;
-      font-family: sans-serif;
+      padding: 16px 20px;
+      color: var(--color-text);
+      font-size: 15px;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
       cursor: pointer;
       touch-action: manipulation;
       border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      transition: background 0.15s;
+      transition: all 0.2s ease;
     }
 
     .cam-list-item:last-child {
       border-bottom: none;
     }
 
+    .cam-list-item:hover {
+      background: rgba(13, 148, 136, 0.1);
+    }
+
     .cam-list-item:active {
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(13, 148, 136, 0.2);
     }
 
     .cam-list-item .check {
-      color: #4cd964;
-      font-size: 16px;
-      opacity: 0;
-      transition: opacity 0.2s;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: transparent;
+      border: 2px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 1;
+      transition: all 0.3s ease;
     }
 
     .cam-list-item .check.active {
-      opacity: 1;
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+      border-color: transparent;
+    }
+
+    .cam-list-item .check.active::after {
+      content: '✓';
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
     }
 
     .cam-list-item .cam-label {
       flex: 1;
-      margin-left: 8px;
+      margin-left: 12px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     .cam-list-item .cam-info {
-      font-size: 11px;
-      color: rgba(255, 255, 255, 0.3);
+      font-size: 12px;
+      color: var(--color-text-secondary);
       margin-left: auto;
-      padding-right: 8px;
+      padding-right: 12px;
     }
 
     #cam-refresh-btn {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
-      padding: 12px;
-      color: rgba(255, 255, 255, 0.5);
-      font-size: 13px;
-      font-family: sans-serif;
+      gap: 8px;
+      padding: 16px;
+      color: var(--color-primary-light);
+      font-size: 14px;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
       cursor: pointer;
       touch-action: manipulation;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      transition: color 0.2s;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      transition: all 0.2s ease;
+    }
+
+    #cam-refresh-btn:hover {
+      background: rgba(13, 148, 136, 0.1);
+      color: var(--color-primary);
     }
 
     #cam-refresh-btn:active {
-      color: rgba(255, 255, 255, 0.85);
+      background: rgba(13, 148, 136, 0.2);
     }
 
     #cam-refresh-btn .spinner {
       display: none;
-      width: 14px;
-      height: 14px;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      border-top-color: rgba(255, 255, 255, 0.7);
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(249, 115, 22, 0.2);
+      border-top-color: var(--color-accent);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
@@ -244,85 +344,126 @@
       position: relative;
       width: 92%;
       max-width: 520px;
-      margin: 10px auto 0;
+      margin: 24px auto 0;
       z-index: 2;
+    }
+
+    .progress-label {
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      margin-bottom: 8px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .progress-container {
+      background: var(--color-surface);
+      border-radius: 12px;
+      padding: 4px;
+      height: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
     }
 
     .progress {
       display: block;
-      height: 6px;
-      margin-bottom: 4px;
-      background: linear-gradient(90deg, #4cd964, #34c759);
-      border-radius: 4px;
+      height: 100%;
+      background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-light) 50%, var(--color-accent) 100%);
+      border-radius: 10px;
       max-width: 100%;
       width: 0;
-      transition: width 0.3s ease;
-      box-shadow: 0 0 8px rgba(76, 217, 100, 0.4);
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 20px rgba(13, 148, 136, 0.4);
     }
 
     .crosshairs {
-      border-color: white !important;
+      border-color: var(--color-primary-light) !important;
     }
 
     .crosshairs.scanning_xhairs {
-      border-color: #FFFF00 !important;
+      border-color: var(--color-warning) !important;
     }
 
     .crosshairs.active_xhairs {
-      border-color: #00FF00 !important;
+      border-color: var(--color-success) !important;
     }
 
     #crosshair1 {
       position: absolute;
       top: 15%;
       right: 20%;
-      width: min(5%, 40px);
-      height: min(5%, 40px);
+      width: min(6%, 48px);
+      height: min(6%, 48px);
       z-index: 1;
-      border-right: clamp(2px, 0.5vw, 5px) groove;
-      border-top: clamp(2px, 0.5vw, 5px) groove;
-      box-shadow: inset 0 0 0 clamp(2px, 0.4vw, 4px) #555;
+      border-right: clamp(3px, 0.6vw, 6px) solid;
+      border-top: clamp(3px, 0.6vw, 6px) solid;
+      border-radius: 0 8px 0 0;
     }
 
     #crosshair2 {
       position: absolute;
       bottom: 20%;
       left: 15%;
-      width: min(5%, 40px);
-      height: min(5%, 40px);
+      width: min(6%, 48px);
+      height: min(6%, 48px);
       z-index: 1;
-      border-left: clamp(2px, 0.5vw, 5px) groove;
-      border-bottom: clamp(2px, 0.5vw, 5px) groove;
-      box-shadow: inset 0 0 0 clamp(2px, 0.4vw, 4px) #555;
+      border-left: clamp(3px, 0.6vw, 6px) solid;
+      border-bottom: clamp(3px, 0.6vw, 6px) solid;
+      border-radius: 0 0 8px 0;
+    }
+
+    /* Scan indicator */
+    .scan-indicator {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--color-primary-light), transparent);
+      animation: scan 2s linear infinite;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .scan-indicator.active {
+      opacity: 1;
+    }
+
+    @keyframes scan {
+      0% { top: 0; }
+      50% { top: 100%; }
+      100% { top: 0; }
     }
 
     /* Debug panel */
     #debug-panel-btn {
       position: fixed;
       bottom: max(90px, env(safe-area-inset-bottom, 0px) + 80px);
-      right: 12px;
+      right: 16px;
       z-index: 40;
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      background: rgba(0, 0, 0, 0.45);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      color: rgba(255, 255, 255, 0.7);
-      font-size: 18px;
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--color-surface) 0%, rgba(30, 41, 59, 0.8) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--color-primary-light);
+      font-size: 20px;
       cursor: pointer;
       touch-action: manipulation;
       display: flex;
       align-items: center;
       justify-content: center;
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      transition: opacity 0.3s;
-      opacity: 0.5;
-      pointer-events: auto;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
     }
 
-    #debug-panel-btn:active {
-      opacity: 1;
+    #debug-panel-btn:hover {
+      transform: scale(1.05);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+      color: white;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
     }
 
     #debug-panel {
@@ -331,16 +472,18 @@
       left: 0;
       right: 0;
       z-index: 60;
-      max-height: 45vh;
-      background: rgba(0, 0, 0, 0.92);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      max-height: 50vh;
+      background: rgba(15, 23, 42, 0.98);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px 24px 0 0;
       transform: translateY(100%);
-      transition: transform 0.3s ease;
+      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
       display: flex;
       flex-direction: column;
       pointer-events: auto;
+      box-shadow: 0 -25px 50px -12px rgba(0, 0, 0, 0.5);
     }
 
     #debug-panel.open {
@@ -351,58 +494,72 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 8px 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
       flex-shrink: 0;
     }
 
     #debug-panel-header span {
-      color: rgba(255, 255, 255, 0.6);
-      font-size: 12px;
-      font-family: monospace;
-      letter-spacing: 1px;
+      color: var(--color-text);
+      font-size: 14px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .debug-actions {
+      display: flex;
+      gap: 8px;
     }
 
     #debug-panel-header button {
-      background: none;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: rgba(255, 255, 255, 0.6);
-      font-size: 11px;
-      padding: 3px 10px;
-      border-radius: 4px;
+      background: var(--color-surface);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--color-text);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 10px;
       cursor: pointer;
       touch-action: manipulation;
+      transition: all 0.2s ease;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    #debug-panel-header button:hover {
+      background: rgba(13, 148, 136, 0.2);
+      border-color: var(--color-primary);
     }
 
     #debug-panel-header button:active {
-      background: rgba(255, 255, 255, 0.1);
+      transform: scale(0.95);
     }
 
     #debug-log {
-      padding: 8px 12px;
+      padding: 16px 20px;
       overflow-y: auto;
-      font-family: monospace;
-      font-size: 11px;
-      line-height: 1.6;
-      color: rgba(255, 255, 255, 0.85);
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      line-height: 1.8;
+      color: var(--color-text);
       white-space: pre-wrap;
       word-break: break-all;
       flex: 1;
-      min-height: 80px;
+      min-height: 100px;
       -webkit-user-select: text;
       user-select: text;
     }
 
     #debug-log .log-warn {
-      color: #ffa500;
+      color: var(--color-warning);
     }
 
     #debug-log .log-error {
-      color: #ff4444;
+      color: var(--color-error);
     }
 
     #debug-log .log-info {
-      color: #88ccff;
+      color: var(--color-primary-light);
     }
 
     /* Dim the background when debug panel is open */
@@ -413,44 +570,81 @@
       right: 0;
       bottom: 0;
       z-index: 55;
-      background: rgba(0, 0, 0, 0.3);
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
       display: none;
       pointer-events: auto;
     }
 
     #debug-backdrop.open {
       display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
     .invisible {
       display: none;
     }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--color-border);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--color-text-secondary);
+    }
   </style>
 
+  <!-- Header -->
+  <div class="app-header">
+    <h1 class="app-title">Cimbar 解码器</h1>
+    <p class="app-subtitle">使用摄像头扫描编码</p>
+  </div>
+
 <div id="container">
-    <video id="video" playsinline webkit-playsinline muted>
-    </video>
+    <video id="video" playsinline webkit-playsinline muted></video>
     <div id="crosshair1" class="crosshairs"></div>
     <div id="crosshair2" class="crosshairs"></div>
+    <div class="scan-indicator" id="scanIndicator"></div>
   </div>
 
   <!-- Camera selector -->
   <div id="cam-selector-bar">
     <button id="cam-selector-btn" onclick="Recv.toggleCameraList()">
-      <span class="label">📷 <span id="cam-current-label">Camera</span></span>
+      <span class="label">
+        <span class="camera-icon">📷</span>
+        <span id="cam-current-label">摄像头</span>
+      </span>
       <span class="arrow" id="cam-arrow">▾</span>
     </button>
     <div id="cam-list-panel">
       <div id="cam-list-items"></div>
       <div id="cam-refresh-btn" onclick="Recv.refreshCameraList()">
         <span class="spinner"></span>
-        <span class="refresh-text">⟳ Refresh list</span>
+        <span class="refresh-text">⟳ 刷新列表</span>
       </div>
     </div>
   </div>
 
   <div id="progress_bars">
-    <div class="progress"></div>
+    <div class="progress-label">扫描进度</div>
+    <div class="progress-container">
+      <div class="progress"></div>
+    </div>
   </div>
 
   </div>
@@ -461,17 +655,17 @@
   <!-- Debug log panel -->
   <div id="debug-panel">
     <div id="debug-panel-header">
-      <span>Console Log</span>
-      <div>
-        <button onclick="Recv.copyLog()" style="margin-right:6px;">Copy</button>
-        <button onclick="Recv.clearLog()">Clear</button>
+      <span>控制台日志</span>
+      <div class="debug-actions">
+        <button onclick="Recv.copyLog()">复制</button>
+        <button onclick="Recv.clearLog()">清空</button>
       </div>
     </div>
     <div id="debug-log"></div>
   </div>
 
   <!-- Floating debug button -->
-  <button id="debug-panel-btn" onclick="Recv.toggleDebugPanel()" title="Debug log">🐛</button>
+  <button id="debug-panel-btn" onclick="Recv.toggleDebugPanel()" title="调试日志">🐛</button>
 
   <!-- Hidden status elements for JS compatibility -->
   <span id="mode-val" style="display:none"></span>
@@ -513,7 +707,7 @@
       var el = document.createElement('div');
       el.id = 'offline-overlay';
       el.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;padding:30px;';
-      el.innerHTML = '<h1 style="font-size:24px;margin-bottom:16px;font-weight:300;">No Internet Connection</h1><p style="font-size:14px;opacity:0.7;max-width:280px;line-height:1.5;">This app requires an internet connection. Please check your network and try again.</p>';
+      el.innerHTML = '<h1 style="font-size:24px;margin-bottom:16px;font-weight:300;">无网络连接</h1><p style="font-size:14px;opacity:0.7;max-width:280px;line-height:1.5;">此应用需要网络连接。请检查您的网络并重试。</p>';
       el.style.display = navigator.onLine ? 'none' : 'flex';
       document.body.appendChild(el);
       window.addEventListener('online', function() { el.style.display = 'none'; });
@@ -526,9 +720,15 @@
     Recv._videoEl = video;
 
     var Module = {};
-    Module.onRuntimeInitialized = () => {
+    Module.onRuntimeInitialized = function() {
       console.log('[CameraDiag] WASM loaded, auto-starting camera');
       Recv.init_video(video);
+      
+      // Activate scan indicator when camera starts
+      var scanIndicator = document.getElementById('scanIndicator');
+      if (scanIndicator) {
+        scanIndicator.classList.add('active');
+      }
     };
   </script>
 

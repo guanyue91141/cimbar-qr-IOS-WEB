@@ -22,6 +22,8 @@
       height: 100vh;
       height: -webkit-fill-available;
       height: 100dvh;
+      overflow: hidden;
+      overscroll-behavior: none;
     }
 
     body {
@@ -420,272 +422,8 @@
       display: block;
     }
 
-    #nav-container:focus-within {
-      z-index: 10;
-    }
-
-    #nav-content,
-    #nav-container .bg,
-    #nav-container:focus-within #nav-button {
-      z-index: 1;
-    }
-
-    /* options */
-    #nav-container a.mode-auto,
-    #nav-container a.mode-b {
-      color: #555;
-    }
-
-    #nav-container.mode-auto a.mode-auto,
-    #nav-container.mode-b a.mode-b {
-      color: #9fa6b2;
-    }
-
-    /* nav stuff */
-    /* built off of https://codepen.io/dannievinther/pen/NvZjvz */
-    #nav-container {
-      position: fixed;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 5;
-      pointer-events: none;
-    }
-
-    #nav-container .bg {
-      pointer-events: auto;
-      position: absolute;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      visibility: hidden;
-      opacity: 0;
-      transition: .3s;
-      background: black;
-    }
-
-    #nav-container:focus-within .bg {
-      visibility: visible;
-      opacity: .6;
-    }
-
-    #nav-container * {
-      visibility: visible;
-    }
-
-    #nav-button {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      height: 60px;
-      width: 30px;
-      margin-left: max(15px, env(safe-area-inset-left));
-      cursor: pointer;
-      pointer-events: auto;
-      touch-action: manipulation;
-      border: 0;
-      outline: 0;
-      background-image: linear-gradient(180deg, rgb(0, 0, 0, 0) 10%, rgb(0, 0, 0) 40%, rgb(0, 0, 0) 60%, rgb(0, 0, 0, 0) 90%);
-      background-color: initial;
-    }
-
-    #nav-button.hide {
-      opacity: 0;
-      transition: .3s;
-    }
-
-    #nav-container:focus-within #nav-button.hide {
-      opacity: 1;
-    }
-
-    .icon-bar {
-      display: block;
-      width: 100%;
-      height: 3px;
-      transition: .3s;
-    }
-
-    .icon-bar+.icon-bar {
-      margin-top: 3px;
-    }
-
-    #nav-container .icon-bar:nth-of-type(1) {
-      background-color: #00ff00;
-      box-shadow: 0px 0px 5px #00ff00, 0px 0px 2px #00ff00;
-    }
-
-    #nav-container .icon-bar:nth-of-type(2) {
-      background-color: #ffff00;
-      box-shadow: 0px 0px 5px #ffff00, 0px 0px 2px #ffff00;
-    }
-
-    #nav-container .icon-bar:nth-of-type(3) {
-      background-color: #00ffff;
-      box-shadow: 0px 0px 5px #00ffff, 0px 0px 2px #00ffff;
-    }
-
-    #nav-container .icon-bar:nth-of-type(4) {
-      background-color: #ff00ff;
-      box-shadow: 0px 0px 5px #ff00ff, 0px 0px 2px #ff00ff;
-    }
-
-    #nav-container.mode-4c .icon-bar:nth-of-type(1) {
-      background-color: #00ffff;
-      box-shadow: 0px 0px 5px #00ffff, 0px 0px 2px #00ffff;
-    }
-
-    #nav-container.mode-4c .icon-bar:nth-of-type(2) {
-      background-color: #ffff00;
-      box-shadow: 0px 0px 5px #ffff00, 0px 0px 2px #ffff00;
-    }
-
-    #nav-container.mode-4c .icon-bar:nth-of-type(3) {
-      background-color: #00ff00;
-      box-shadow: 0px 0px 5px #00ff00, 0px 0px 2px #00ff00;
-    }
-
-    #nav-container.mode-4c .icon-bar:nth-of-type(4) {
-      background-color: #ff00ff;
-      box-shadow: 0px 0px 5px #ff00ff, 0px 0px 2px #ff00ff;
-    }
-
-    #nav-container:focus-within #nav-button {
-      pointer-events: none;
-    }
-
-    #nav-container:focus-within .icon-bar {
-      background-color: #aaa;
-      background-image: none !important;
-      box-shadow: none !important;
-    }
-
-    #nav-button.attention:focus-within .icon-bar {
-      background-color: #00ffff;
-    }
-
-    #nav-container:focus-within .icon-bar:nth-of-type(1) {
-      transform: translate3d(0, 9px, 0) rotate(45deg);
-    }
-
-    #nav-container:focus-within .icon-bar:nth-of-type(2),
-    #nav-container:focus-within .icon-bar:nth-of-type(3) {
-      opacity: 0;
-    }
-
-    #nav-container:focus-within .icon-bar:nth-of-type(4) {
-      transform: translate3d(0, -9px, 0) rotate(-45deg);
-    }
-
-    #nav-content {
-      margin-top: 60px;
-      padding: 20px;
-      position: absolute;
-      top: 0;
-      left: 0;
-      height: calc(100% - 60px);
-      height: calc(100dvh - 60px);
-      overflow-x: clip;
-      background-color: #282C34;
-      text-align: center;
-      pointer-events: auto;
-      -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
-      transform: translateX(-100%);
-      transition: transform .3s;
-      min-width: 220px;
-    }
-
-    /* Full-width nav on mobile */
-    @media (max-width: 480px) {
-      #nav-content {
-        width: 100%;
-        padding: 20px 0;
-      }
-    }
-
-    #nav-content ul {
-      height: calc(100% - 60px);
-      display: flex;
-      flex-direction: column;
-      list-style: none;
-    }
-
-    #nav-content hr {
-      border: 1px solid #444;
-    }
-
-    #nav-content li a {
-      display: block;
-      padding: 10px 5px;
-      color: #9fa6b2;
-      text-decoration: none;
-      transition: color .1s;
-    }
-
-    #nav-content li a.attention {
-      animation: glowing 1.5s infinite alternate;
-    }
-
-    #nav-content li a {
-      font-variant: small-caps;
-      font-size: 2em;
-    }
-
-    #nav-content h4 {
-      color: gray;
-      font-variant: small-caps;
-      padding-top: 1em;
-    }
-
-    #nav-content li.modesel a {
-      display: inline-block;
-      width: 4em;
-    }
-
-    #nav-content li:hover {
-      background-color: #2c323c;
-    }
-
-    #nav-content li:not(.small)+.small {
-      margin-top: auto;
-    }
-
-    #nav-content li.small {
-      display: flex;
-      align-self: center;
-    }
-
-    #nav-content li.small a {
-      font-size: 1em;
-    }
-
-    #nav-container:focus-within #nav-content,
-    #debug_menu:focus-within {
-      transform: none;
-    }
-
-    #debug_menu {
-      transform: translateX(100%);
-      margin-top: 60px;
-      right: 0;
-      padding: 20px;
-      position: absolute;
-      top: 0;
-      max-width: 95%;
-      z-index: 2;
-      transition: transform .3s;
-      opacity: 95%;
-      background-color: black;
-    }
-
     .invisible {
       display: none;
-    }
-
-    @keyframes glowing {
-      0% {
-        color: #00ffff;
-      }
     }
   </style>
 
@@ -735,39 +473,15 @@
   <!-- Floating debug button -->
   <button id="debug-panel-btn" onclick="Recv.toggleDebugPanel()" title="Debug log">🐛</button>
 
-  <div id="nav-container" class="mode-auto">
-    <div class="bg" onclick="Recv.blurNav();"></div>
-    <button id="nav-button" tabindex="0" onclick="Recv.clickNav();">
-      <span class="icon-bar"></span>
-      <span class="icon-bar"></span>
-      <span class="icon-bar"></span>
-      <span class="icon-bar"></span>
-    </button>
-    <div id="nav-content" tabindex="-1">
-      <ul>
-        <li class="modesel">
-          <h4>Mode</h4>
-          <a class="mode-auto" href="javascript:void(0)" onclick="Recv.setMode('Auto')">Auto</a>
-          <a class="mode-b" id="mode-val" href="javascript:void(0)" onclick="Recv.setMode(this.textContent)">B</a>
-        </li>
-        <li class="small"><a href="javascript:void(0)" onclick="Recv.showDebug()">Debug</a></li>
-        <li class="small"><a href="javascript:void(0)" onclick="Recv.toggleFullscreen()">Fullscreen</a></li>
-        <li class="small"><a href="javascript:void(0)" onclick="Recv.toggleCameraList()">Camera List</a></li>
-        <li class="small"><a href="https://github.com/sz3/libcimbar">github</a></li>
-        <li class="small"><a href="https://github.com/sz3/cfc/releases/latest">android app</a></li>
-      </ul>
-    </div>
-    <div id="debug_menu">
-      <button id="debug-button" onclick="Recv.showDebug();"></button>
-      <div class="statusbox" id="errorbox"></div>
-      <div class="statusbox" id="t0">hi0</div>
-      <div class="statusbox" id="t1">hi1</div>
-      <div class="statusbox" id="t2">hi2</div>
-      <div class="statusbox" id="t3">hi3</div>
-      <div class="statusbox" id="framesInFlight"></div>
-      <div class="statusbox" id="tdec">2026-05-09T0146</div>
-    </div>
-  </div>
+  <!-- Hidden status elements for JS compatibility -->
+  <span id="mode-val" style="display:none"></span>
+  <div class="statusbox" id="errorbox" style="display:none"></div>
+  <div class="statusbox" id="t0" style="display:none"></div>
+  <div class="statusbox" id="t1" style="display:none"></div>
+  <div class="statusbox" id="t2" style="display:none"></div>
+  <div class="statusbox" id="t3" style="display:none"></div>
+  <div class="statusbox" id="framesInFlight" style="display:none"></div>
+  <div class="statusbox" id="tdec" style="display:none"></div>
 
   <script src="recv.2026-05-09T0146.js"></script>
   <script src="zstd.2026-05-09T0146.js"></script>

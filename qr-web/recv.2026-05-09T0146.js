@@ -932,19 +932,23 @@ var Recv = function () {
     },
 
     showDebug: function () {
-      document.getElementById("debug-button").focus();
+      var btn = document.getElementById("debug-button");
+      if (btn) btn.focus();
     },
 
     clickNav: function () {
-      document.getElementById("nav-button").focus();
+      var btn = document.getElementById("nav-button");
+      if (btn) btn.focus();
     },
 
     blurNav: function (pause) {
       if (pause === undefined) {
         pause = true;
       }
-      document.getElementById("nav-button").blur();
-      document.getElementById("nav-content").blur();
+      var btn = document.getElementById("nav-button");
+      if (btn) btn.blur();
+      var content = document.getElementById("nav-content");
+      if (content) content.blur();
     },
 
     setMode: function (modeVal) {
@@ -974,19 +978,20 @@ var Recv = function () {
         Sink.allocate();
       }
 
-      // update ui
-      if (_mode > 0) {
-        var nav = document.getElementById("mode-val");
-        nav.innerHTML = modeToString[_mode];
+      var modeEl = document.getElementById("mode-val");
+      if (modeEl && _mode > 0) {
+        modeEl.innerHTML = modeToString[_mode];
       }
 
-      var nav = document.getElementById("nav-container");
-      if (_mode == 0) {
-        nav.classList.add("mode-auto");
-        nav.classList.remove("mode-b");
-      } else {
-        nav.classList.add("mode-b");
-        nav.classList.remove("mode-auto");
+      var navEl = document.getElementById("nav-container");
+      if (navEl) {
+        if (_mode == 0) {
+          navEl.classList.add("mode-auto");
+          navEl.classList.remove("mode-b");
+        } else {
+          navEl.classList.add("mode-b");
+          navEl.classList.remove("mode-auto");
+        }
       }
     },
 

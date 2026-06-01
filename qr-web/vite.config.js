@@ -7,13 +7,17 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
     rollupOptions: {
-      input: 'index.html',
+      input: 'recv.html',
     },
   },
 
   plugins: [
     viteStaticCopy({
       targets: [
+        // Redirect index.html
+        { src: 'index.html', dest: './' },
+        // Main recv.html
+        { src: 'recv.html', dest: './' },
         // All versioned JS — loaded via plain <script> tags (non-module IIFE)
         { src: 'recv.2026-05-09T0146.js', dest: './' },
         { src: 'zstd.2026-05-09T0146.js', dest: './' },

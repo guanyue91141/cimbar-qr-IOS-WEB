@@ -294,74 +294,6 @@
       box-shadow: inset 0 0 0 clamp(2px, 0.4vw, 4px) #555;
     }
 
-    /* Start camera overlay */
-    #start-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 50;
-      background: rgba(0, 0, 0, 0.85);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-family: sans-serif;
-      text-align: center;
-      padding: 30px;
-    }
-
-    #start-overlay.hidden {
-      display: none;
-    }
-
-    #start-overlay h1 {
-      font-size: 28px;
-      margin-bottom: 10px;
-      font-weight: 300;
-      letter-spacing: 2px;
-    }
-
-    #start-overlay p {
-      font-size: 14px;
-      margin-bottom: 30px;
-      opacity: 0.7;
-      max-width: 280px;
-      line-height: 1.5;
-    }
-
-    #start-btn {
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.15);
-      border: 2px solid rgba(255, 255, 255, 0.6);
-      color: white;
-      font-size: 36px;
-      cursor: pointer;
-      touch-action: manipulation;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      transition: all 0.3s;
-      margin-bottom: 16px;
-    }
-
-    #start-btn:active {
-      background: rgba(255, 255, 255, 0.3);
-      transform: scale(1.1);
-    }
-
-    #start-btn-label {
-      font-size: 13px;
-      opacity: 0.6;
-      letter-spacing: 1px;
-    }
-
     /* Debug panel */
     #debug-panel-btn {
       position: fixed;
@@ -783,15 +715,6 @@
     <div class="progress"></div>
   </div>
 
-  <!-- Start camera overlay (shown until user taps) -->
-  <div id="start-overlay">
-    <h1>Cimbar</h1>
-    <p>Tap to start scanning cimbar codes</p>
-    <button id="start-btn" onclick="Recv.startCamera()">▶</button>
-    <div id="start-btn-label">Start Camera</div>
-    <div id="ios-hint" style="display:none; margin-top:24px; font-size:12px; opacity:0.5; max-width:260px; line-height:1.4;">
-      If no permission prompt appears, try Safari instead, or ensure the page is served over <b>HTTPS</b>.
-    </div>
   </div>
 
   <!-- Debug panel backdrop -->
@@ -885,20 +808,13 @@
 
     var video = document.querySelector('#video');
 
-    // Remembers video element for later use when user taps Start
+    // Remembers video element for later use
     Recv._videoEl = video;
-
-    // Show iOS hint if on Apple mobile device (Chrome/Safari on iPhone/iPad)
-    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-      var iosHint = document.getElementById('ios-hint');
-      if (iosHint) iosHint.style.display = 'block';
-    }
 
     var Module = {};
     Module.onRuntimeInitialized = () => {
-      console.log('[CameraDiag] WASM loaded, waiting for user to tap Start');
-      // Camera is NOT auto-started — user must tap the start button
-      // This ensures mobile browsers show permission dialog on user gesture
+      console.log('[CameraDiag] WASM loaded, auto-starting camera');
+      Recv.init_video(video);
     };
   </script>
 

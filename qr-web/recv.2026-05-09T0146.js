@@ -153,6 +153,7 @@ var Recv = function () {
   var _captureCanvas = null;
   var _captureCtx = null;
   var _cams = [];
+  var _camResolutions = {};
   var _currentCamIndex = 0;
   var _framesInFlight = 0;
   var _supportedFormats = ["NV12", "I420"]; // have cimbard_* return this somehow?
@@ -182,6 +183,73 @@ var Recv = function () {
       case 67: return 1.413;  // Bm
       default: return 1.0;    // B, 4C, auto
     }
+  }
+
+  function _cameraQualityConstraints(extraVideoConstraints) {
+    var videoConstraints = {
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 15, max: 30 },
+      focusMode: { ideal: 'continuous' },
+      exposureMode: { ideal: 'continuous' }
+    };
+    for (var key in extraVideoConstraints) {
+      videoConstraints[key] = extraVideoConstraints[key];
+    }
+    return {
+      audio: false,
+      video: videoConstraints
+    };
+  }
+
+  function _formatResolution(width, height) {
+    if (!width || !height) {
+      return '';
+    }
+    return Math.round(width) + 'x' + Math.round(height);
+  }
+
+  function _cameraResolutionFromCapabilities(cam) {
+    if (!cam || !cam.getCapabilities) {
+      return '';
+    }
+    try {
+      var caps = cam.getCapabilities();
+      if (caps && caps.width && caps.height) {
+        var maxRes = _formatResolution(caps.width.max, caps.height.max);
+        var minRes = _formatResolution(caps.width.min, caps.height.min);
+        if (maxRes && minRes && maxRes !== minRes) {
+          return minRes + '-' + maxRes;
+        }
+        return maxRes || minRes;
+      }
+    } catch (e) {
+      console.warn('[CameraDiag] Failed to read camera capabilities:', e && e.message ? e.message : e);
+    }
+    return '';
+  }
+
+  function _rememberCameraResolution(camIndex, stream) {
+    if (!stream) {
+      return;
+    }
+    var tracks = stream.getVideoTracks ? stream.getVideoTracks() : [];
+    if (!tracks || tracks.length == 0) {
+      return;
+    }
+    var settings = tracks[0].getSettings ? tracks[0].getSettings() : {};
+    var resolution = _formatResolution(settings.width, settings.height);
+    if (!resolution) {
+      return;
+    }
+    _camResolutions[camIndex] = resolution;
+    if (_cams[camIndex] && _cams[camIndex].deviceId) {
+      _camResolutions[_cams[camIndex].deviceId] = resolution;
+    }
+    if (settings.deviceId) {
+      _camResolutions[settings.deviceId] = resolution;
+    }
+    Recv.updateCameraListUI();
   }
 
   function _updateCrosshairPositions() {
@@ -214,8 +282,6 @@ var Recv = function () {
       offsetY = (contH - vidH) / 2;
       offsetX = (contW - (vidH * modeAspect)) / 2;
     }
-
-    console.log('crosshair offsets now ' + offsetX + ', ' + offsetY);
 
     var xh1 = document.getElementById("crosshair1");
     var xh2 = document.getElementById("crosshair2");
@@ -290,19 +356,14 @@ var Recv = function () {
         // so label matching for 'back'/'rear' is unreliable. iOS always returns cameras in fixed
         // order: front=0, back=1. We use the index to decide which facingMode to request.
         // Even indices (0,2,...) → rear camera; Odd indices (1,3,...) → front camera.
-        constraints = {
-          audio: false,
-          video: {
-            facingMode: index % 2 === 0 ? 'environment' : 'user'
-          }
-        };
+        constraints = _cameraQualityConstraints({
+          facingMode: index % 2 === 0 ? 'environment' : 'user'
+        });
       } else {
-        constraints = {
-          audio: false,
-          video: {
-            deviceId: { exact: cam.deviceId }
-          }
-        };
+        constraints = _cameraQualityConstraints({
+          deviceId: { exact: cam.deviceId },
+          facingMode: { ideal: 'environment' }
+        });
       }
       Recv._startCamera(constraints, index);
     },
@@ -347,6 +408,10 @@ var Recv = function () {
             video.src = URL.createObjectURL(localMediaStream);
           }
           video.play();
+          _rememberCameraResolution(camIndex, localMediaStream);
+          video.onloadedmetadata = function () {
+            _rememberCameraResolution(camIndex, localMediaStream);
+          };
           video.requestVideoFrameCallback(Recv.on_frame);
           console.log('[CameraDiag] Camera ' + camIndex + ' started successfully');
           // Re-enumerate now that permission is granted (iOS hides labels before permission)
@@ -467,14 +532,19 @@ var Recv = function () {
         var cam = _cams[ci];
         var camName = cam.label || ('Camera ' + (ci + 1));
         var checked = ci === _currentCamIndex ? ' active' : '';
-        var facingInfo = '';
-        if (isIOS()) {
-          facingInfo = '<span class="cam-info">' + (ci % 2 === 0 ? 'rear' : 'front') + '</span>';
+        var resolution = _camResolutions[cam.deviceId] || _camResolutions[ci] || _cameraResolutionFromCapabilities(cam);
+        var infoParts = [];
+        if (resolution) {
+          infoParts.push(resolution);
         }
+        if (isIOS()) {
+          infoParts.push(ci % 2 === 0 ? 'rear' : 'front');
+        }
+        var cameraInfo = infoParts.length ? '<span class="cam-info">' + _escapeHtml(infoParts.join(' / ')) + '</span>' : '';
         html += '<div class="cam-list-item" data-index="' + ci + '">' +
           '<span class="check' + checked + '">✓</span>' +
           '<span class="cam-label">' + _escapeHtml(camName) + '</span>' +
-          facingInfo +
+          cameraInfo +
           '</div>';
       }
       itemsEl.innerHTML = html;
@@ -538,7 +608,7 @@ var Recv = function () {
         if (_cams.length == 0 || (isIOS() && allEmptyLabels)) {
           if (isIOS()) {
             console.log('iOS: no labeled cameras found, trying rear camera');
-            Recv._startCamera({ audio: false, video: { facingMode: 'environment' } }, 0);
+            Recv._startCamera(_cameraQualityConstraints({ facingMode: 'environment' }), 0);
             return;
           }
           Recv.set_error("No camera detected. Please connect a camera and refresh.");
@@ -570,7 +640,9 @@ var Recv = function () {
       }).catch(function(err) {
         console.log('enumerateDevices error, trying camera directly', err);
         // Rear camera preferred on iOS, basic video elsewhere
-        var fallbackConstraints = isIOS() ? { audio: false, video: { facingMode: 'environment' } } : { audio: false, video: true };
+        var fallbackConstraints = isIOS()
+          ? _cameraQualityConstraints({ facingMode: 'environment' })
+          : _cameraQualityConstraints({ facingMode: { ideal: 'environment' } });
         Recv._startCamera(fallbackConstraints, 0);
       });
     },
@@ -613,6 +685,13 @@ var Recv = function () {
 
     on_decode: function (wid, data) {
       //console.log('Main thread received message from worker' + wid + ':', data);
+      if (data.ready) {
+        _workersReadyCount++;
+        console.log('[Decode] Worker ' + wid + ' ready (' + _workersReadyCount + '/' + _workers.length + ')');
+        if (_workerReady)
+          _workerReady();
+        return;
+      }
       Recv.frames_in_flight_decr();
       // if extract but no bytes, log extract counte
       if (data.nodata) {
@@ -620,13 +699,6 @@ var Recv = function () {
         return;
       }
       if (data.failed_extract) { // very common, nothing to do
-        return;
-      }
-      if (data.ready) {
-        _workersReadyCount++;
-        console.log('[Decode] Worker ' + wid + ' ready (' + _workersReadyCount + '/' + _workers.length + ')');
-        if (_workerReady)
-          _workerReady();
         return;
       }
       // Handle "no wasm" / error messages that don't carry a data.buff
@@ -646,16 +718,20 @@ var Recv = function () {
       Sink.on_decode(buff);
     },
 
-    on_frame: function (now, metadata) {
+    on_frame: async function (now, metadata) {
       //console.log("on frame");
       // https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame
 
       _counter += 1;
-      if (_workers.length == 0)
+      if (_workers.length == 0) {
+        _video.requestVideoFrameCallback(Recv.on_frame);
         return;
+      }
       // Don't send frames until at least one worker's WASM is initialized
-      if (_workersReadyCount == 0)
+      if (_workersReadyCount == 0) {
+        _video.requestVideoFrameCallback(Recv.on_frame);
         return;
+      }
       if (_nextWorker >= _workers.length)
         _nextWorker = 0;
 
@@ -685,7 +761,7 @@ var Recv = function () {
           }
           const size = vf.allocationSize(vfparams);
           const buff = new Uint8Array(size);
-          vf.copyTo(buff, vfparams);
+          await vf.copyTo(buff, vfparams);
 
           let format = vfparams.format || vf.format;
           if (format == "RGBA" && size != width * height * 4) {
@@ -701,8 +777,9 @@ var Recv = function () {
         } catch (e) {
           // VideoFrame API not available (common on older iOS / WKWebView).
           // Fall back to Canvas 2D capture.
-          console.warn('VideoFrame failed, using Canvas fallback:', e.message);
+          console.warn('VideoFrame failed, using Canvas fallback:', e && e.message ? e.message : e);
           Recv.set_HTML("errorbox", 'Canvas fallback', true);
+          var postedFallbackFrame = false;
           try {
             if (!_captureCanvas) {
               _captureCanvas = document.createElement('canvas');
@@ -718,10 +795,14 @@ var Recv = function () {
               var fmt = 'RGBA';
               var md = _mode || modeVals[_counter % modeVals.length];
               _workers[_nextWorker].postMessage({ type: 'proc', pixels: imgData.data, format: fmt, width: cw, height: ch, mode: md }, [imgData.data.buffer]);
+              postedFallbackFrame = true;
             }
           } catch (e2) {
             console.error('Canvas fallback also failed:', e2);
             Recv.set_HTML("errorbox", 'Frame error: ' + e2.message, true);
+          }
+          if (!postedFallbackFrame) {
+            Recv.frames_in_flight_decr();
           }
         }
         _nextWorker += 1;

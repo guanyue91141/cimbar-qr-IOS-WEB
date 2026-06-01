@@ -185,6 +185,49 @@ var Recv = function () {
     }
   }
 
+  function _isRearCamera(cam, index) {
+    var label = ((cam && cam.label) || '').toLowerCase();
+    if (label.indexOf('后置') !== -1 || label.indexOf('rear') !== -1 || label.indexOf('back') !== -1 || label.indexOf('environment') !== -1) {
+      return true;
+    }
+    if (label.indexOf('前置') !== -1 || label.indexOf('front') !== -1 || label.indexOf('user') !== -1) {
+      return false;
+    }
+    // iPhone commonly enumerates the front camera before rear cameras.
+    return index % 2 === 1;
+  }
+
+  function _cameraFacingLabel(cam, index) {
+    return _isRearCamera(cam, index) ? 'rear' : 'front';
+  }
+
+  function _cameraPreferenceScore(cam, index) {
+    var label = ((cam && cam.label) || '').toLowerCase();
+    if (!_isRearCamera(cam, index)) {
+      return 1000 + index;
+    }
+
+    // Prefer the plain rear/main camera over ultra-wide or telephoto lenses.
+    var score = 100 + index;
+    if (label === '后置相机' || label.indexOf('rear camera') !== -1 || label.indexOf('back camera') !== -1) {
+      score = 0;
+    } else if (label.indexOf('后置') !== -1 && label.indexOf('相机') !== -1 &&
+      label.indexOf('超广角') === -1 && label.indexOf('广角') === -1 && label.indexOf('长焦') === -1) {
+      score = 5;
+    } else if (label.indexOf('三镜头') !== -1 || label.indexOf('triple') !== -1) {
+      score = 20;
+    } else if (label.indexOf('双镜头') !== -1 || label.indexOf('dual') !== -1) {
+      score = 30;
+    } else if (label.indexOf('超广角') !== -1 || label.indexOf('ultra') !== -1) {
+      score = 70;
+    } else if (label.indexOf('长焦') !== -1 || label.indexOf('tele') !== -1) {
+      score = 80;
+    } else if (label.indexOf('广角') !== -1 || label.indexOf('wide') !== -1) {
+      score = 60;
+    }
+    return score + index / 100;
+  }
+
   function _cameraQualityConstraints(extraVideoConstraints) {
     var videoConstraints = {
       width: { ideal: 1920 },
@@ -353,11 +396,10 @@ var Recv = function () {
       var constraints;
       if (isIOS()) {
         // On iOS, camera labels are localized (e.g. '后置摄像头' in Chinese, 'Rückkamera' in German)
-        // so label matching for 'back'/'rear' is unreliable. iOS always returns cameras in fixed
-        // order: front=0, back=1. We use the index to decide which facingMode to request.
-        // Even indices (0,2,...) → rear camera; Odd indices (1,3,...) → front camera.
+        // so label matching is best-effort. If labels are unavailable, we fall back to
+        // the common iPhone order where front appears before rear.
         constraints = _cameraQualityConstraints({
-          facingMode: index % 2 === 0 ? 'environment' : 'user'
+          facingMode: _isRearCamera(cam, index) ? 'environment' : 'user'
         });
       } else {
         constraints = _cameraQualityConstraints({
@@ -538,7 +580,7 @@ var Recv = function () {
           infoParts.push(resolution);
         }
         if (isIOS()) {
-          infoParts.push(ci % 2 === 0 ? 'rear' : 'front');
+          infoParts.push(_cameraFacingLabel(cam, ci));
         }
         var cameraInfo = infoParts.length ? '<span class="cam-info">' + _escapeHtml(infoParts.join(' / ')) + '</span>' : '';
         html += '<div class="cam-list-item" data-index="' + ci + '">' +
@@ -635,6 +677,11 @@ var Recv = function () {
           }
         }
         var tryOrder = physicalIndices.concat(virtualIndices);
+        if (isIOS()) {
+          tryOrder.sort(function(a, b) {
+            return _cameraPreferenceScore(_cams[a], a) - _cameraPreferenceScore(_cams[b], b);
+          });
+        }
         _currentCamIndex = tryOrder[0] || 0;
         Recv._tryCamera(_currentCamIndex);
       }).catch(function(err) {

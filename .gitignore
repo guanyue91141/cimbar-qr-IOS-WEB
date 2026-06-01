@@ -16,3 +16,6 @@
 /.omo
 /qr-web/node_modules
 qr-web/dist/
+/libcimbar/src/lib
+/ngrok
+/libcimbar/test

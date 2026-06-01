@@ -1,41 +1,51 @@
-### [INTRODUCTION](https://github.com/sz3/cimbar) | [ABOUT](https://github.com/sz3/cimbar/blob/master/ABOUT.md) | CFC | [LIBCIMBAR](https://github.com/sz3/libcimbar)
+### [简介](https://github.com/sz3/cimbar) | [关于](https://github.com/sz3/cimbar/blob/master/ABOUT.md) | CFC | [LIBCIMBAR](https://github.com/sz3/libcimbar)
 
-## CameraFileCopy
+## CameraFileCopy (相机文件传输)
 
-This is an android app for receiving data over the camera as a one-way data channel. It does not use any antennas (wifi, bluetooth, nfc, ...) or other tricks. Notably, this means it works just as well in airplane mode.
+这是一个 Android 应用，用于通过摄像头作为单向数据通道接收数据。它不使用任何天线（WiFi、蓝牙、NFC 等）或其他技巧。值得注意的是，这意味着它在飞行模式下也能正常工作。
 
-The app reads animated [cimbar codes](https://github.com/sz3/libcimbar). Nearly all the interesting logic is from libcimbar -- included via a git subtree.
+该应用读取动画 [cimbar 编码](https://github.com/sz3/libcimbar)。几乎所有有趣的逻辑都来自 libcimbar -- 通过 git subtree 包含进来。
 
-The *sender* component of cfc is a cimbar encoder -- such as https://cimbar.org. Navigate to that website (or use libcimbar's `cimbar_send` to generate barcodes natively), open a file to initialize the cimbar stream, and point the app+camera at the animated barcode.
+CFC 的*发送端*是一个 cimbar 编码器 -- 例如 https://cimbar.org。导航到该网站（或使用 libcimbar 的 `cimbar_send` 原生生成条形码），打开文件初始化 cimbar 流，然后将应用和摄像头对准动画条形码即可。
 
-## Release apks
+## 当前版本特性
+
+### v2.0.0
+- ✅ **中文本地化支持**：完整的中文界面翻译
+- ✅ **移动端优化**：支持 Android 和 iOS 设备
+- ✅ **iOS 兼容**：适配 iOS Safari/Chrome（需 HTTPS）
+- ✅ **深色模式**：OLED 风格的深色主题 UI
+- ✅ **响应式设计**：适配各种屏幕尺寸
+- ✅ **安全区域适配**：支持 iPhone 刘海屏和底部安全区域
+- ✅ **PWA 支持**：可安装到主屏幕
+
+## 发布 APK
 
 [<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
-     alt="Get it on F-Droid"
+     alt="在 F-Droid 下载"
      height="80">](https://f-droid.org/packages/org.cimbar.camerafilecopy/)
 [<img src="https://play.google.com/intl/en_us/badges/images/generic/en-play-badge.png"
-     alt="Get it on Google Play"
+     alt="在 Google Play 下载"
      height="80">](https://play.google.com/store/apps/details?id=org.cimbar.camerafilecopy)
 
-Release apks are also available here: https://github.com/sz3/cfc/releases/
+发布的 APK 也可在此处下载：https://github.com/sz3/cfc/releases/
 
-Only arm64-v8a is officially supported at the moment, because that is all I can test for.
+目前官方仅支持 arm64-v8a 架构，因为这是我能够测试的全部。
 
-## Building
+## 构建指南
 
-1. Install android studio
-2. Install the android ndk
-3. Download [OpenCV for android](https://github.com/opencv/opencv/releases/download/4.5.0/opencv-4.5.0-android-sdk.zip)
-4. Create a project with this repo at the root
-5. update `gradle.properties` such that `opencvsdk` point to wherever you extracted the OpenCV Android SDK.
+1. 安装 Android Studio
+2. 安装 Android NDK
+3. 下载 [OpenCV for Android](https://github.com/opencv/opencv/releases/download/4.5.0/opencv-4.5.0-android-sdk.zip)
+4. 以本仓库为根目录创建项目
+5. 更新 `gradle.properties`，使 `opencvsdk` 指向您解压 OpenCV Android SDK 的位置
 
-I found this project incredibly useful for getting started:
+我发现这个项目对入门非常有帮助：
 
 https://github.com/VlSomers/native-opencv-android-template
 
-## licensing, dependencies, etc
+## 许可证、依赖等
 
-The code in cfc, such as it is, is MIT licensed. It is mostly a blend of various tutorial apps + wrapper code around libcimbar.
+CFC 中的代码（如果有的话）采用 MIT 许可证。它主要是各种教程应用和 libcimbar 包装代码的混合体。
 
-The libcimbar code is MPL 2.0. libcimbar's dependencies are a variety of MIT, BSD, zlib, boost, apache, ...
-
+libcimbar 代码采用 MPL 2.0 许可证。libcimbar 的依赖包括各种 MIT、BSD、zlib、boost、apache 等许可证的库。

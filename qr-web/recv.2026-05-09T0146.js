@@ -232,7 +232,6 @@ var Recv = function () {
     var videoConstraints = {
       width: { ideal: 1920 },
       height: { ideal: 1080 },
-      frameRate: { ideal: 15, max: 30 },
       focusMode: { ideal: 'continuous' },
       exposureMode: { ideal: 'continuous' }
     };

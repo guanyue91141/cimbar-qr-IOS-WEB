@@ -677,7 +677,7 @@
   <div class="statusbox" id="framesInFlight" style="display:none"></div>
   <div class="statusbox" id="tdec" style="display:none"></div>
 
-  <script src="recv.2026-05-09T0146.js"></script>
+  <script src="recv.2026-05-09T0146.js?v=20260716-recover1"></script>
   <script src="zstd.2026-05-09T0146.js"></script>
 
   <script type="text/javascript">
@@ -696,8 +696,7 @@
     var isMobile = /Mobi|Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
     var numWorkers = isMobile ? 2 : 4;
     if (navigator.hardwareConcurrency) {
-      var usableCores = Math.max(1, Math.floor(navigator.hardwareConcurrency / 2));
-      numWorkers = Math.min(usableCores, isMobile ? 2 : 4);
+      numWorkers = Math.min(navigator.hardwareConcurrency - 1, isMobile ? 3 : 4);
       numWorkers = Math.max(1, numWorkers);
     }
     console.log('[CameraDiag] Mobile:', isMobile, 'Workers:', numWorkers);

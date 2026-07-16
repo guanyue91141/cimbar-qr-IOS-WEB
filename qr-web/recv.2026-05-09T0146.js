@@ -75,7 +75,7 @@ var Sink = function () {
       const fountBuff = fountain_buff();
       fountBuff.set(buff);
 
-      console.log('sink decode ' + fountBuff); //TODO: base64?
+      console.log('sink decode bytes ' + buff.length);
       var res = Module._cimbard_fountain_decode(fountBuff.byteOffset, buff.length);
       console.log("on decode got res " + res);
 
@@ -147,9 +147,15 @@ var Recv = function () {
 
   var _video = 0;
   var _workers = [];
+  var _workerBusy = [];
+  var _workerReadyFlags = [];
   var _nextWorker = 0;
   var _workerReady;
   var _workersReadyCount = 0;
+  var _lastFrameSentAt = 0;
+  var _lastVisualUpdateAt = 0;
+  var _lastProgressRenderAt = 0;
+  var _droppedFrames = 0;
   var _captureCanvas = null;
   var _captureCtx = null;
   var _cams = [];
@@ -174,6 +180,63 @@ var Recv = function () {
     const isAppleDevice = navigator.userAgent.includes('Macintosh');
     const isTouchScreen = navigator.maxTouchPoints >= 1;
     return isIOS || (isAppleDevice && isTouchScreen);
+  }
+
+  function isMobileDevice() {
+    return /Mobi|Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent) || isIOS();
+  }
+
+  function _targetFrameIntervalMs() {
+    // APK scans around camera frame cadence and drops stale work. Keep the browser
+    // similarly bounded so large RGBA frames cannot build a delayed queue.
+    if (isIOS()) {
+      return 90;
+    }
+    return isMobileDevice() ? 75 : 65;
+  }
+
+  function _findIdleWorker() {
+    if (_workers.length == 0) {
+      return -1;
+    }
+    for (var offset = 0; offset < _workers.length; offset++) {
+      var idx = (_nextWorker + offset) % _workers.length;
+      if (_workerReadyFlags[idx] && !_workerBusy[idx]) {
+        _nextWorker = (idx + 1) % _workers.length;
+        return idx;
+      }
+    }
+    return -1;
+  }
+
+  function _markFramePosted(workerIndex) {
+    _workerBusy[workerIndex] = true;
+    Recv.frames_in_flight_incr();
+  }
+
+  function _markFrameDone(workerIndex) {
+    if (_workerBusy[workerIndex]) {
+      _workerBusy[workerIndex] = false;
+      Recv.frames_in_flight_decr();
+    }
+  }
+
+  function _createWorker(index) {
+    _workerBusy[index] = false;
+    _workerReadyFlags[index] = false;
+    var worker = new Worker('recv-worker.2026-05-09T0146.js');
+
+    worker.onmessage = (event) => {
+      Recv.on_decode(index, event.data);
+    };
+
+    worker.onerror = (error) => {
+      console.error('Worker' + index + ' error:', error);
+      _markFrameDone(index);
+      _workerReadyFlags[index] = false;
+    };
+
+    return worker;
   }
 
   function _getModeAspectRatio(mode) {
@@ -229,10 +292,11 @@ var Recv = function () {
   }
 
   function _cameraQualityConstraints(extraVideoConstraints) {
+    var mobile = isMobileDevice();
     var videoConstraints = {
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
-      frameRate: { ideal: 15, max: 30 },
+      width: mobile ? { ideal: 1280, max: 1920 } : { ideal: 1920, max: 1920 },
+      height: mobile ? { ideal: 720, max: 1080 } : { ideal: 1080, max: 1080 },
+      frameRate: { ideal: 15, max: mobile ? 20 : 30 },
       focusMode: { ideal: 'continuous' },
       exposureMode: { ideal: 'continuous' }
     };
@@ -356,23 +420,24 @@ var Recv = function () {
     },
 
     frames_in_flight_decr: function () {
-      _framesInFlight -= 1;
+      _framesInFlight = Math.max(0, _framesInFlight - 1);
       document.getElementById('framesInFlight').innerHTML = _framesInFlight;
     },
 
     init_ww: function (num_workers) {
-      // clean up _workers if exists?
+      for (var old = 0; old < _workers.length; old++) {
+        try {
+          _workers[old].terminate();
+        } catch (e) { }
+      }
       _workers = [];
+      _workerBusy = [];
+      _workerReadyFlags = [];
+      _workersReadyCount = 0;
+      _framesInFlight = 0;
+      _nextWorker = 0;
       for (let i = 0; i < num_workers; i++) {
-        _workers.push(new Worker('recv-worker.2026-05-09T0146.js'));
-
-        _workers[i].onmessage = (event) => {
-          Recv.on_decode(i, event.data);
-        };
-
-        _workers[i].onerror = (error) => {
-          console.error('Worker' + i + ' error:', error);
-        };
+        _workers.push(_createWorker(i));
       }
     },
 
@@ -733,13 +798,16 @@ var Recv = function () {
     on_decode: function (wid, data) {
       //console.log('Main thread received message from worker' + wid + ':', data);
       if (data.ready) {
-        _workersReadyCount++;
+        if (!_workerReadyFlags[wid]) {
+          _workerReadyFlags[wid] = true;
+          _workersReadyCount++;
+        }
         console.log('[Decode] Worker ' + wid + ' ready (' + _workersReadyCount + '/' + _workers.length + ')');
         if (_workerReady)
           _workerReady();
         return;
       }
-      Recv.frames_in_flight_decr();
+      _markFrameDone(wid);
       // if extract but no bytes, log extract counte
       if (data.nodata) {
         _recentExtract = _counter;
@@ -761,7 +829,7 @@ var Recv = function () {
       if (buff.length > 0) {
         Recv.setMode(data.mode); // call *before* we send it to the sink. This is our autodetect confirm.
       }
-      Recv.set_HTML("t" + wid, "mode is " + _mode + ", len() is " + buff.length + ", buff: " + buff);
+      Recv.set_HTML("t" + wid, "mode is " + _mode + ", len() is " + buff.length);
       Sink.on_decode(buff);
     },
 
@@ -770,31 +838,28 @@ var Recv = function () {
       // https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame
 
       _counter += 1;
-      if (_workers.length == 0) {
-        _video.requestVideoFrameCallback(Recv.on_frame);
-        return;
-      }
-      // Don't send frames until at least one worker's WASM is initialized
-      if (_workersReadyCount == 0) {
-        _video.requestVideoFrameCallback(Recv.on_frame);
-        return;
-      }
-      if (_nextWorker >= _workers.length)
-        _nextWorker = 0;
 
       // piggyback off this call to make sure our visual state is correct
-      Recv.update_visual_state();
+      if (now - _lastVisualUpdateAt > 120) {
+        _lastVisualUpdateAt = now;
+        Recv.update_visual_state();
+      }
       // make sure the camera feed stays up
       Recv.watch_for_camera_pause();
 
       const modeVals = [66, 68, 67, 4];
 
       var vf = undefined;
-      if (_framesInFlight > 20) {
-        console.log("stalling, worker queues are full");
+      var workerIndex = _findIdleWorker();
+      if (_workers.length == 0 || _workersReadyCount == 0 || workerIndex < 0 || now - _lastFrameSentAt < _targetFrameIntervalMs()) {
+        _droppedFrames++;
+        if ((_droppedFrames & 63) == 1 && workerIndex < 0 && _workersReadyCount > 0) {
+          console.log('[Decode] dropping camera frames while workers are busy. inFlight=' + _framesInFlight);
+        }
       }
       else {
-        Recv.frames_in_flight_incr();
+        _lastFrameSentAt = now;
+        var postedFrame = false;
         try {
           vf = new VideoFrame(_video, { timestamp: now });
           const width = vf.displayWidth;
@@ -820,7 +885,9 @@ var Recv = function () {
           }
 
           let mode = _mode || modeVals[_counter % modeVals.length];
-          _workers[_nextWorker].postMessage({ type: 'proc', pixels: buff, format: format, width: width, height: height, mode: mode }, [buff.buffer]);
+          _workers[workerIndex].postMessage({ type: 'proc', pixels: buff, format: format, width: width, height: height, mode: mode }, [buff.buffer]);
+          _markFramePosted(workerIndex);
+          postedFrame = true;
         } catch (e) {
           // VideoFrame API not available (common on older iOS / WKWebView).
           // Fall back to Canvas 2D capture.
@@ -841,18 +908,19 @@ var Recv = function () {
               var imgData = _captureCtx.getImageData(0, 0, cw, ch);
               var fmt = 'RGBA';
               var md = _mode || modeVals[_counter % modeVals.length];
-              _workers[_nextWorker].postMessage({ type: 'proc', pixels: imgData.data, format: fmt, width: cw, height: ch, mode: md }, [imgData.data.buffer]);
+              _workers[workerIndex].postMessage({ type: 'proc', pixels: imgData.data, format: fmt, width: cw, height: ch, mode: md }, [imgData.data.buffer]);
+              _markFramePosted(workerIndex);
               postedFallbackFrame = true;
+              postedFrame = true;
             }
           } catch (e2) {
             console.error('Canvas fallback also failed:', e2);
             Recv.set_HTML("errorbox", 'Frame error: ' + e2.message, true);
           }
-          if (!postedFallbackFrame) {
-            Recv.frames_in_flight_decr();
+          if (!postedFallbackFrame && postedFrame) {
+            _markFrameDone(workerIndex);
           }
         }
-        _nextWorker += 1;
       }
       if (vf)
         vf.close();
@@ -898,7 +966,11 @@ var Recv = function () {
     },
 
     render_progress: function (report) {
-      console.log("progress!!!!" + report);
+      var now = performance.now ? performance.now() : Date.now();
+      if (now - _lastProgressRenderAt < 100) {
+        return;
+      }
+      _lastProgressRenderAt = now;
       Recv.set_HTML("tdec", "progress " + report);
       const progress_container = document.getElementById('progress_bars');
       const query = '#progress_bars > div[class="progress"]';
@@ -918,11 +990,7 @@ var Recv = function () {
       }
 
       const current = document.querySelectorAll(query);
-      if (current) {
-        console.log(current.length);
-      }
       for (var i = 0; i < report.length; i++) {
-        console.log(report[i] * 100 + "%");
         current[i].style.width = report[i] * 100 + "%";
       }
     },

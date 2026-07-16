@@ -1,5 +1,6 @@
 let _wasmInitialized = false;
 let _buffs = {};
+let _lastMode = 0;
 
 var Module = {
   preRun: [],
@@ -20,8 +21,9 @@ var RecvWorker = function () {
       const width = data.width;
       const height = data.height;
       const mode = data.mode;
-      if (mode) {
+      if (mode && mode !== _lastMode) {
         Module._cimbard_configure_decode(mode);
+        _lastMode = mode;
       }
 
       try {
@@ -58,7 +60,6 @@ var RecvWorker = function () {
         self.postMessage(msg);
       }
       else { //if (len > 0) {
-        console.log('len is ' + len);
         const msgbuf = new Uint8Array(Module.HEAPU8.buffer, fountainBuff.byteOffset, len).slice();
         //console.log(msgbuf);
         self.postMessage({ mode: mode, buff: msgbuf }, [msgbuf.buffer]);

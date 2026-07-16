@@ -696,7 +696,8 @@
     var isMobile = /Mobi|Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
     var numWorkers = isMobile ? 2 : 4;
     if (navigator.hardwareConcurrency) {
-      numWorkers = Math.min(navigator.hardwareConcurrency - 1, isMobile ? 3 : 4);
+      var usableCores = Math.max(1, Math.floor(navigator.hardwareConcurrency / 2));
+      numWorkers = Math.min(usableCores, isMobile ? 2 : 4);
       numWorkers = Math.max(1, numWorkers);
     }
     console.log('[CameraDiag] Mobile:', isMobile, 'Workers:', numWorkers);

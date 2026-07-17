@@ -150,6 +150,8 @@ var Recv = function () {
   var _nextWorker = 0;
   var _workerReady;
   var _workersReadyCount = 0;
+  var _workerReadyFlags = [];
+  var _workerBusyFlags = [];
   var _captureCanvas = null;
   var _captureCtx = null;
   var _cams = [];
@@ -379,8 +381,13 @@ var Recv = function () {
     init_ww: function (num_workers) {
       // clean up _workers if exists?
       _workers = [];
+      _workersReadyCount = 0;
+      _workerReadyFlags = [];
+      _workerBusyFlags = [];
       for (let i = 0; i < num_workers; i++) {
         _workers.push(new Worker('recv-worker.2026-05-09T0146.js'));
+        _workerReadyFlags.push(false);
+        _workerBusyFlags.push(false);
 
         _workers[i].onmessage = (event) => {
           Recv.on_decode(i, event.data);
@@ -388,6 +395,10 @@ var Recv = function () {
 
         _workers[i].onerror = (error) => {
           console.error('Worker' + i + ' error:', error);
+          if (_workerBusyFlags[i]) {
+            Recv.frames_in_flight_decr();
+          }
+          _workerBusyFlags[i] = false;
         };
       }
     },
@@ -752,12 +763,16 @@ var Recv = function () {
     on_decode: function (wid, data) {
       //console.log('Main thread received message from worker' + wid + ':', data);
       if (data.ready) {
-        _workersReadyCount++;
+        if (!_workerReadyFlags[wid]) {
+          _workerReadyFlags[wid] = true;
+          _workersReadyCount++;
+        }
         console.log('[Decode] Worker ' + wid + ' ready (' + _workersReadyCount + '/' + _workers.length + ')');
         if (_workerReady)
           _workerReady();
         return;
       }
+      _workerBusyFlags[wid] = false;
       Recv.frames_in_flight_decr();
       // if extract but no bytes, log extract counte
       if (data.nodata) {
@@ -784,6 +799,23 @@ var Recv = function () {
       Sink.on_decode(buff);
     },
 
+    _nextAvailableWorker: function () {
+      if (_workersReadyCount == 0) {
+        return -1;
+      }
+      for (var attempts = 0; attempts < _workers.length; attempts++) {
+        if (_nextWorker >= _workers.length) {
+          _nextWorker = 0;
+        }
+        var wid = _nextWorker;
+        _nextWorker += 1;
+        if (_workerReadyFlags[wid] && !_workerBusyFlags[wid]) {
+          return wid;
+        }
+      }
+      return -1;
+    },
+
     on_frame: async function (now, metadata) {
       //console.log("on frame");
       // https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame
@@ -798,8 +830,7 @@ var Recv = function () {
         _video.requestVideoFrameCallback(Recv.on_frame);
         return;
       }
-      if (_nextWorker >= _workers.length)
-        _nextWorker = 0;
+      var targetWorker = Recv._nextAvailableWorker();
 
       // piggyback off this call to make sure our visual state is correct
       Recv.update_visual_state();
@@ -809,14 +840,14 @@ var Recv = function () {
       const modeVals = [66, 68, 67, 4];
 
       var vf = undefined;
-      var maxFramesInFlight = Math.max(1, Math.min(_workers.length, isMobile() ? 2 : _workers.length));
-      if (_framesInFlight >= maxFramesInFlight) {
+      if (targetWorker < 0) {
         if (_counter % 30 == 0) {
-          console.log("dropping frame, decoder busy (" + _framesInFlight + "/" + maxFramesInFlight + ")");
+          console.log("dropping frame, decoder busy (" + _framesInFlight + "/" + _workersReadyCount + ")");
         }
       }
       else {
         Recv.frames_in_flight_incr();
+        _workerBusyFlags[targetWorker] = true;
         try {
           vf = new VideoFrame(_video, { timestamp: now });
           const width = vf.displayWidth;
@@ -842,7 +873,7 @@ var Recv = function () {
           }
 
           let mode = _mode || modeVals[_counter % modeVals.length];
-          _workers[_nextWorker].postMessage({ type: 'proc', pixels: buff, format: format, width: width, height: height, mode: mode }, [buff.buffer]);
+          _workers[targetWorker].postMessage({ type: 'proc', pixels: buff, format: format, width: width, height: height, mode: mode }, [buff.buffer]);
         } catch (e) {
           // VideoFrame API not available (common on older iOS / WKWebView).
           // Fall back to Canvas 2D capture.
@@ -863,7 +894,7 @@ var Recv = function () {
               var imgData = _captureCtx.getImageData(0, 0, cw, ch);
               var fmt = 'RGBA';
               var md = _mode || modeVals[_counter % modeVals.length];
-              _workers[_nextWorker].postMessage({ type: 'proc', pixels: imgData.data, format: fmt, width: cw, height: ch, mode: md }, [imgData.data.buffer]);
+              _workers[targetWorker].postMessage({ type: 'proc', pixels: imgData.data, format: fmt, width: cw, height: ch, mode: md }, [imgData.data.buffer]);
               postedFallbackFrame = true;
             }
           } catch (e2) {
@@ -871,10 +902,10 @@ var Recv = function () {
             Recv.set_HTML("errorbox", 'Frame error: ' + e2.message, true);
           }
           if (!postedFallbackFrame) {
+            _workerBusyFlags[targetWorker] = false;
             Recv.frames_in_flight_decr();
           }
         }
-        _nextWorker += 1;
       }
       if (vf)
         vf.close();

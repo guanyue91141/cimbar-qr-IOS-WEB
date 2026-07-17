@@ -176,6 +176,14 @@ var Recv = function () {
     return isIOS || (isAppleDevice && isTouchScreen);
   }
 
+  function isAndroid() {
+    return /Android/i.test(navigator.userAgent);
+  }
+
+  function isMobile() {
+    return /Mobi|Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
+  }
+
   function _getModeAspectRatio(mode) {
     // (image_size_x + 16) / (image_size_y + 16)
     switch (mode) {
@@ -193,8 +201,16 @@ var Recv = function () {
     if (label.indexOf('前置') !== -1 || label.indexOf('front') !== -1 || label.indexOf('user') !== -1) {
       return false;
     }
-    // iPhone commonly enumerates the front camera before rear cameras.
-    return index % 2 === 1;
+    if (isIOS()) {
+      // iPhone commonly enumerates the front camera before rear cameras.
+      return index % 2 === 1;
+    }
+    if (isAndroid()) {
+      // Android labels usually include "facing back/front"; if not, the last
+      // enumerated camera is often the environment camera on Chrome.
+      return index === _cams.length - 1;
+    }
+    return false;
   }
 
   function _cameraFacingLabel(cam, index) {
@@ -232,6 +248,7 @@ var Recv = function () {
     var videoConstraints = {
       width: { ideal: 1920 },
       height: { ideal: 1080 },
+      frameRate: { ideal: 15, max: 20 },
       focusMode: { ideal: 'continuous' },
       exposureMode: { ideal: 'continuous' }
     };
@@ -355,7 +372,7 @@ var Recv = function () {
     },
 
     frames_in_flight_decr: function () {
-      _framesInFlight -= 1;
+      _framesInFlight = Math.max(0, _framesInFlight - 1);
       document.getElementById('framesInFlight').innerHTML = _framesInFlight;
     },
 
@@ -578,7 +595,7 @@ var Recv = function () {
         if (resolution) {
           infoParts.push(resolution);
         }
-        if (isIOS()) {
+        if (isMobile()) {
           infoParts.push(_cameraFacingLabel(cam, ci));
         }
         var cameraInfo = infoParts.length ? '<span class="cam-info">' + _escapeHtml(infoParts.join(' / ')) + '</span>' : '';
@@ -676,10 +693,13 @@ var Recv = function () {
           }
         }
         var tryOrder = physicalIndices.concat(virtualIndices);
-        if (isIOS()) {
+        if (isMobile()) {
           tryOrder.sort(function(a, b) {
             return _cameraPreferenceScore(_cams[a], a) - _cameraPreferenceScore(_cams[b], b);
           });
+          console.log('[CameraDiag] Mobile camera try order:', tryOrder.map(function(idx) {
+            return idx + ':' + (_cams[idx].label || '(no label)') + '/' + _cameraFacingLabel(_cams[idx], idx);
+          }).join(', '));
         }
         _currentCamIndex = tryOrder[0] || 0;
         Recv._tryCamera(_currentCamIndex);
@@ -789,8 +809,11 @@ var Recv = function () {
       const modeVals = [66, 68, 67, 4];
 
       var vf = undefined;
-      if (_framesInFlight > 20) {
-        console.log("stalling, worker queues are full");
+      var maxFramesInFlight = Math.max(1, Math.min(_workers.length, isMobile() ? 2 : _workers.length));
+      if (_framesInFlight >= maxFramesInFlight) {
+        if (_counter % 30 == 0) {
+          console.log("dropping frame, decoder busy (" + _framesInFlight + "/" + maxFramesInFlight + ")");
+        }
       }
       else {
         Recv.frames_in_flight_incr();
@@ -899,14 +922,24 @@ var Recv = function () {
     render_progress: function (report) {
       Recv.set_HTML("tdec", "progress " + report);
       const progress_container = document.getElementById('progress_bars');
-      const query = '#progress_bars > div[class="progress"]';
+      const progress_host = progress_container ? progress_container.querySelector('.progress-container') : null;
+      const progress_label = progress_container ? progress_container.querySelector('.progress-label') : null;
+      const query = '#progress_bars .progress-container > .progress';
       const prev = document.querySelectorAll(query);
+      const maxProgress = report.reduce(function(max, value) {
+        var numeric = Number(value) || 0;
+        return Math.max(max, numeric);
+      }, 0);
 
-      if (!prev || prev.length < report.length) {
+      if (progress_label) {
+        progress_label.textContent = '扫描进度 ' + Math.round(Math.max(0, Math.min(1, maxProgress)) * 100) + '%';
+      }
+
+      if (progress_host && (!prev || prev.length < report.length)) {
         for (var i = (prev ? prev.length : 0); i < report.length; i++) {
           var aaa = document.createElement('div');
           aaa.classList.add("progress");
-          progress_container.appendChild(aaa);
+          progress_host.appendChild(aaa);
         }
       }
       else if (report.length < prev.length) {
@@ -917,7 +950,8 @@ var Recv = function () {
 
       const current = document.querySelectorAll(query);
       for (var i = 0; i < report.length; i++) {
-        current[i].style.width = report[i] * 100 + "%";
+        var pct = Math.max(0, Math.min(1, Number(report[i]) || 0));
+        current[i].style.width = pct * 100 + "%";
       }
     },
 

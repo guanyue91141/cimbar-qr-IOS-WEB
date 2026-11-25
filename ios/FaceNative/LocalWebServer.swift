@@ -16,10 +16,17 @@ final class LocalWebServer {
     }
 
     private init() {
-        guard let url = Bundle.main.resourceURL?.appendingPathComponent("WebRoot", isDirectory: true) else {
-            fatalError("WebRoot missing from app bundle")
+        let fm = FileManager.default
+        if let nested = Bundle.main.resourceURL?.appendingPathComponent("WebRoot", isDirectory: true),
+           fm.fileExists(atPath: nested.appendingPathComponent("recv.html").path) {
+            rootURL = nested
+        } else if let flat = Bundle.main.resourceURL,
+                  fm.fileExists(atPath: flat.appendingPathComponent("recv.html").path) {
+            // Fallback when WebRoot folder reference is flattened into .app root
+            rootURL = flat
+        } else {
+            fatalError("Web assets (recv.html) missing from app bundle")
         }
-        rootURL = url
     }
 
     func start() throws {

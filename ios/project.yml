@@ -24,10 +24,13 @@ targets:
       - path: FaceNative
         excludes:
           - "**/.gitkeep"
+          - "WebRoot"
+          - "WebRoot/**"
+          - "Assets.xcassets"
+          - "Assets.xcassets/**"
     resources:
       - path: FaceNative/WebRoot
         type: folder
-        buildPhase: resources
       - path: FaceNative/Assets.xcassets
     settings:
       base:

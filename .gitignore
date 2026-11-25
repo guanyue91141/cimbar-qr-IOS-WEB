@@ -19,3 +19,18 @@ qr-web/dist/
 /libcimbar/src/lib
 /ngrok
 /libcimbar/test
+
+# iOS local signing / build outputs
+/密钥/
+/dist/
+ios/FaceNative.xcodeproj/
+ios/FaceNative/WebRoot/**
+!ios/FaceNative/WebRoot/.gitkeep
+ios/build/
+*.ipa
+*.xcarchive
+*.mobileprovision
+*.p12
+*.p8
+*.jks
+AuthKey_*.p8

@@ -1,0 +1,182 @@
+name: iOS IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      export_method:
+        description: "Signing / export method"
+        required: true
+        default: app-store
+        type: choice
+        options:
+          - app-store
+          - development
+      build_number:
+        description: "CFBundleVersion override (empty = run number)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build-sign:
+    name: Build and sign IPA
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    env:
+      PRODUCT_BUNDLE_ID: cn.guanyue.face.ios
+      TEAM_ID: KMF5U4LK8D
+      KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+      P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: qr-web/package-lock.json
+
+      - name: Build qr-web assets
+        working-directory: qr-web
+        run: |
+          npm ci
+          npm run build
+          test -f dist/recv.html
+
+      - name: Stage WebRoot into iOS bundle
+        run: |
+          rm -rf ios/FaceNative/WebRoot
+          mkdir -p ios/FaceNative/WebRoot
+          cp -R qr-web/dist/. ios/FaceNative/WebRoot/
+          ls -la ios/FaceNative/WebRoot | head
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Resolve signing inputs
+        id: signing
+        run: |
+          METHOD="${{ github.event.inputs.export_method }}"
+          if [ "$METHOD" = "development" ]; then
+            echo "export_plist=ios/ExportOptions/development.plist" >> "$GITHUB_OUTPUT"
+            echo "profile_name=FaceNative Development iPhoneGy" >> "$GITHUB_OUTPUT"
+            echo "identity=Apple Development" >> "$GITHUB_OUTPUT"
+          else
+            echo "export_plist=ios/ExportOptions/appstore.plist" >> "$GITHUB_OUTPUT"
+            echo "profile_name=FaceNative App Store" >> "$GITHUB_OUTPUT"
+            echo "identity=Apple Distribution" >> "$GITHUB_OUTPUT"
+          fi
+          BUILD_NO="${{ github.event.inputs.build_number }}"
+          if [ -z "$BUILD_NO" ]; then BUILD_NO="${{ github.run_number }}"; fi
+          echo "build_number=$BUILD_NO" >> "$GITHUB_OUTPUT"
+
+      - name: Import certificate and provisioning profile
+        env:
+          DIST_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          APPSTORE_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROVISION_BASE64 }}
+          DEV_P12_BASE64: ${{ secrets.IOS_DEVELOPMENT_P12_BASE64 }}
+          DEV_PROFILE_BASE64: ${{ secrets.IOS_DEVELOPMENT_PROVISION_BASE64 }}
+        run: |
+          set -euo pipefail
+          METHOD="${{ github.event.inputs.export_method }}"
+          if [ "$METHOD" = "development" ]; then
+            P12_BASE64="${DEV_P12_BASE64:-}"
+            PROFILE_BASE64="${DEV_PROFILE_BASE64:-}"
+          else
+            P12_BASE64="${DIST_P12_BASE64:-}"
+            PROFILE_BASE64="${APPSTORE_PROFILE_BASE64:-}"
+          fi
+          if [ -z "${P12_BASE64:-}" ] || [ -z "${PROFILE_BASE64:-}" ]; then
+            echo "Missing signing secrets for method=$METHOD"
+            echo "Run scripts/ios/setup-secrets.ps1 locally first."
+            exit 1
+          fi
+          if [ -z "${KEYCHAIN_PASSWORD:-}" ]; then
+            KEYCHAIN_PASSWORD="temp-keychain-${RANDOM}"
+            echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
+          fi
+          if [ -z "${P12_PASSWORD:-}" ]; then
+            echo "IOS_P12_PASSWORD secret is required"
+            exit 1
+          fi
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/face-signing.keychain-db"
+          CERT_PATH="$RUNNER_TEMP/signing.p12"
+          PROFILE_PATH="$RUNNER_TEMP/profile.mobileprovision"
+
+          echo "$P12_BASE64" | base64 --decode > "$CERT_PATH"
+          echo "$PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed -e s/\"//g)
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          UUID=$(security cms -D -i "$PROFILE_PATH" | plutil -extract UUID raw -)
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${UUID}.mobileprovision"
+          echo "Installed profile UUID=$UUID name=${{ steps.signing.outputs.profile_name }}"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Archive
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          xcodebuild \
+            -project FaceNative.xcodeproj \
+            -scheme FaceNative \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/FaceNative.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            PRODUCT_BUNDLE_IDENTIFIER="$PRODUCT_BUNDLE_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="${{ steps.signing.outputs.identity }}" \
+            PROVISIONING_PROFILE_SPECIFIER="${{ steps.signing.outputs.profile_name }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.signing.outputs.build_number }}" \
+            MARKETING_VERSION="1.0.0" \
+            archive
+
+      - name: Export IPA
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ipa"
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/FaceNative.xcarchive" \
+            -exportOptionsPlist "${{ steps.signing.outputs.export_plist }}" \
+            -exportPath "$RUNNER_TEMP/ipa"
+          ls -la "$RUNNER_TEMP/ipa"
+          test -f "$RUNNER_TEMP/ipa/FaceNative.ipa"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FaceNative-ipa
+          path: ${{ runner.temp }}/ipa/*.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload archive (debug)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FaceNative-xcarchive-failure
+          path: ${{ runner.temp }}/FaceNative.xcarchive
+          if-no-files-found: ignore
+          retention-days: 5

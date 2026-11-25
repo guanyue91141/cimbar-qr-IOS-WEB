@@ -35,26 +35,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: qr-web/package-lock.json
-
-      - name: Build qr-web assets
-        working-directory: qr-web
+      - name: Stage qr-web assets into iOS WebRoot
         run: |
-          npm ci
-          npm run build
-          test -f dist/recv.html
-
-      - name: Stage WebRoot into iOS bundle
-        run: |
+          set -euo pipefail
           rm -rf ios/FaceNative/WebRoot
           mkdir -p ios/FaceNative/WebRoot
-          cp -R qr-web/dist/. ios/FaceNative/WebRoot/
-          ls -la ios/FaceNative/WebRoot | head
+          # qr-web is already a static decoder bundle; Vite only copies these files.
+          cp qr-web/index.html \
+             qr-web/recv.html \
+             qr-web/recv.2026-05-09T0146.js \
+             qr-web/recv-worker.2026-05-09T0146.js \
+             qr-web/zstd.2026-05-09T0146.js \
+             qr-web/cimbar_js.2026-05-09T0146.js \
+             qr-web/cimbar_js.2026-05-09T0146.wasm \
+             qr-web/favicon.ico \
+             ios/FaceNative/WebRoot/
+          test -f ios/FaceNative/WebRoot/recv.html
+          test -f ios/FaceNative/WebRoot/cimbar_js.2026-05-09T0146.wasm
+          ls -la ios/FaceNative/WebRoot
 
       - name: Install XcodeGen
         run: brew install xcodegen

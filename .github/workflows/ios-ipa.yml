@@ -22,7 +22,7 @@ permissions:
 jobs:
   build-sign:
     name: Build and sign IPA
-    runs-on: macos-14
+    runs-on: macos-latest
     timeout-minutes: 60
 
     env:
